@@ -1,4 +1,3 @@
-export const WebsiteName: string = "SaaS Starter"
-export const WebsiteBaseUrl: string = "https://saasstarter.work"
-export const WebsiteDescription: string =
-  "Open source, fast, and free to host SaaS template. Built with SvelteKit, Supabase, Stripe, Tailwind, DaisyUI, and Postgres"
+export const WebsiteName: string = "Ananda"
+export const WebsiteBaseUrl: string = "https://ananda.app"
+export const WebsiteDescription: string = "Ananda is an interactive guided meditation app that leverages computer vision to evaluate mental state and posture, offering tailored instructions accordingly"
