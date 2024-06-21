@@ -115,8 +115,8 @@
       linkText: null,
       newPage: null,
       description:
-        "Join a vibrant community of kindred spirits, co-travelers on your spiritual path, for love and support.",
-      svgContent: `        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+        "Join the global conscious living community, find fellow travelers on your spiritual journey.",
+      svgContent: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
           ><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
             id="SVGRepo_tracerCarrier"
             stroke-linecap="round"
@@ -175,6 +175,112 @@
               fill="#1C274C"
             ></path>
           </g></svg
+        >`,
+    },
+    {
+      name: "Retreats",
+      link: null,
+      linkText: null,
+      newPage: null,
+      description:
+        "Discover retreats, overcome obstacles on your path, deepen your practice.",
+      svgContent: `<svg
+          viewBox="0 0 24 24"
+          id="Layer_1"
+          data-name="Layer 1"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="#000000"
+          ><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
+            id="SVGRepo_tracerCarrier"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          ></g><g id="SVGRepo_iconCarrier"
+            ><defs
+              ><style>
+                .cls-1 {
+                  fill: none;
+                  stroke: #020202;
+                  stroke-miterlimit: 10;
+                  stroke-width: 1.91px;
+                }
+              </style></defs
+            ><path
+              class="cls-1"
+              d="M12,1.5h0A10.5,10.5,0,0,1,22.5,12v0a1.91,1.91,0,0,1-1.91,1.91H3.41A1.91,1.91,0,0,1,1.5,12v0A10.5,10.5,0,0,1,12,1.5Z"
+            ></path><circle class="cls-1" cx="12" cy="3.41" r="1.91"
+            ></circle><circle class="cls-1" cx="18.68" cy="9.14" r="1.91"
+            ></circle><circle class="cls-1" cx="7.23" cy="9.14" r="1.91"
+            ></circle><path
+              class="cls-1"
+              d="M12,22.5h0a3.83,3.83,0,0,0,3.74-4.66l-.88-3.93H9.14l-.88,3.93A3.83,3.83,0,0,0,12,22.5Z"
+            ></path></g
+          ></svg
+        >`,
+    },
+    {
+      name: "Coaching",
+      link: null,
+      linkText: null,
+      newPage: null,
+      description:
+        "Find your teacher, guide, shaman, guru, roshi who can take you to the next level.",
+      svgContent: `<svg
+          viewBox="0 0 24 24"
+          id="Layer_1"
+          data-name="Layer 1"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="#000000"
+          ><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
+            id="SVGRepo_tracerCarrier"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          ></g><g id="SVGRepo_iconCarrier"
+            ><defs
+              ><style>
+                .cls-1 {
+                  fill: none;
+                  stroke: #020202;
+                  stroke-miterlimit: 10;
+                  stroke-width: 1.91px;
+                }
+              </style></defs
+            ><rect
+              class="cls-1"
+              x="4.36"
+              y="18.68"
+              width="15.27"
+              height="3.82"
+              rx="1.91"
+            ></rect><path
+              class="cls-1"
+              d="M12,10.09h0a5.73,5.73,0,0,1,5.73,5.73v2.86a0,0,0,0,1,0,0H6.27a0,0,0,0,1,0,0V15.82A5.73,5.73,0,0,1,12,10.09Z"
+            ></path><rect
+              class="cls-1"
+              x="9.14"
+              y="3.41"
+              width="5.73"
+              height="6.68"
+              rx="2.86"
+            ></rect><path
+              class="cls-1"
+              d="M12,1.5h0a1,1,0,0,1,1,1v1a0,0,0,0,1,0,0H11a0,0,0,0,1,0,0v-1A1,1,0,0,1,12,1.5Z"
+            ></path><line
+              class="cls-1"
+              x1="7.23"
+              y1="18.68"
+              x2="11.05"
+              y2="22.5"
+            ></line><line
+              class="cls-1"
+              x1="16.77"
+              y1="18.68"
+              x2="12.95"
+              y2="22.5"
+            ></line><polyline
+              class="cls-1"
+              points="10.09 18.68 10.09 15.82 14.98 10.93"
+            ></polyline></g
+          ></svg
         >`,
     },
   ]
@@ -295,8 +401,9 @@
         <span
           class="underline decoration-secondary decoration-[3px] md:decoration-[4px]"
         >
-          guided meditation apps
+          guided meditation
         </span>
+        apps
       </div>
     </div>
 
