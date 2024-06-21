@@ -55,5 +55,7 @@
       <a class="link link-hover" href="/contact_us">Contact Us</a>
       <a class="link link-hover" href="https://tally.so/r/w7DOZP">Waitlist</a>
     </nav>
+
+    <p>Made with ❤️ in 🇮🇳</p>
   </footer>
 </div>
