@@ -53,6 +53,21 @@
 />
 
 <SettingsModule
+  title="Invite User"
+  editable={true}
+  fields={[
+    {
+      id: "inviteEmail",
+      initialValue: "",
+      inputType: "email",
+      placeholder: "Enter email to invite",
+    },
+  ]}
+  formTarget="?/invite"
+  saveButtonTitle="Send Invite"
+/>
+
+<SettingsModule
   title="Danger Zone"
   editable={false}
   dangerous={true}

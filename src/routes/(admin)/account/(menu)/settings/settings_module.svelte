@@ -34,15 +34,45 @@
   export let editLink: string = ""
   export let saveButtonTitle: string = "Save"
 
+  let errorMessage = ""
+  let successMessage = ""
+
+  let formValues: { [key: string]: string | boolean } = {}
+
+  $: {
+    console.log("Fields initialization:", fields)
+    console.log("Form values before setting:", formValues)
+
+    fields.forEach((field) => {
+      if (!(field.id in formValues)) {
+        formValues[field.id] = field.initialValue || ""
+      }
+    })
+  }
+
   const handleSubmit: SubmitFunction = () => {
     loading = true
+    errorMessage = "" // Clear previous error
+    successMessage = "" // Clear previous success message
     return async ({ update, result }) => {
       await update({ reset: false })
       await applyAction(result)
       loading = false
       if (result.type === "success") {
-        showSuccess = true
+        successMessage = result.data?.message || "Operation successful!"
+        fields.forEach((field) => {
+          formValues[field.id] = field.initialValue
+        })
+      } else if (result.type === "failure") {
+        errorMessage = result.data?.errorMessage || "An error occurred."
       }
+    }
+  }
+
+  function handleInput(event: Event, fieldId: string) {
+    const target = event.target as HTMLInputElement | null
+    if (target) {
+      formValues[fieldId] = target.value ?? ""
     }
   }
 </script>
@@ -96,17 +126,24 @@
               class="{fieldError($page?.form, field.id)
                 ? 'input-error'
                 : ''} input-sm mt-1 input input-bordered w-full max-w-xs mb-3 text-base py-4"
-              value={$page.form ? $page.form[field.id] : field.initialValue}
+              value={formValues[field.id]}
               maxlength={field.maxlength ? field.maxlength : null}
+              on:input={(e) => handleInput(e, field.id)}
             />
           {:else}
             <div class="text-lg mb-3">{field.initialValue}</div>
           {/if}
         {/each}
 
-        {#if $page?.form?.errorMessage}
+        {#if errorMessage}
           <p class="text-red-700 text-sm font-bold mt-1">
-            {$page?.form?.errorMessage}
+            {errorMessage}
+          </p>
+        {/if}
+
+        {#if successMessage}
+          <p class="text-green-700 text-sm font-bold mt-1">
+            {successMessage}
           </p>
         {/if}
 

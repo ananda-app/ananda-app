@@ -9,8 +9,6 @@
   let { supabase } = data
 
   onMount(() => {
-    return goto("/")
-
     supabase.auth.onAuthStateChange((event) => {
       // Redirect to account after sucessful login
       if (event == "SIGNED_IN") {

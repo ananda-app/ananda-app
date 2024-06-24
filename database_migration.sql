@@ -70,3 +70,34 @@ create policy "Avatar images are publicly accessible." on storage.objects
 
 create policy "Anyone can upload an avatar." on storage.objects
   for insert with check (bucket_id = 'avatars');
+
+-- Create invitations table
+CREATE TABLE invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  token UUID NOT NULL,
+  invited_by UUID NOT NULL REFERENCES auth.users(id),
+  accepted BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
+
+-- Create policy to allow users to view invitations they've sent
+CREATE POLICY "Users can view invitations they've sent" ON invitations
+  FOR SELECT USING (auth.uid() = invited_by);
+
+-- Create policy to allow users to insert new invitations
+CREATE POLICY "Users can create invitations" ON invitations
+  FOR INSERT WITH CHECK (auth.uid() = invited_by);
+
+-- Create policy to allow users to update invitations they've sent
+CREATE POLICY "Users can update invitations they've sent" ON invitations
+  FOR UPDATE USING (auth.uid() = invited_by);
+
+-- Create index on email for faster lookups
+CREATE INDEX idx_invitations_email ON invitations(email);
+
+-- Create index on token for faster lookups
+CREATE INDEX idx_invitations_token ON invitations(token);

@@ -101,6 +101,40 @@ export interface Database {
           },
         ]
       }
+      invitations: {
+        Row: {
+          id: string
+          email: string
+          token: string
+          invited_by: string
+          accepted: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          token: string
+          invited_by: string
+          accepted?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          token?: string
+          invited_by?: string
+          accepted?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
