@@ -40,9 +40,6 @@
   let formValues: { [key: string]: string | boolean } = {}
 
   $: {
-    console.log("Fields initialization:", fields)
-    console.log("Form values before setting:", formValues)
-
     fields.forEach((field) => {
       if (!(field.id in formValues)) {
         formValues[field.id] = field.initialValue || ""

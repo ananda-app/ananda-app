@@ -57,7 +57,15 @@
   editable={true}
   fields={[
     {
+      id: "inviteName",
+      label: "Name",
+      initialValue: "",
+      inputType: "text",
+      placeholder: "Enter name of invitee",
+    },
+    {
       id: "inviteEmail",
+      label: "Email",
       initialValue: "",
       inputType: "email",
       placeholder: "Enter email to invite",
