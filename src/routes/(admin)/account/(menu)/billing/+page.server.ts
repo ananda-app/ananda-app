@@ -12,12 +12,13 @@ export const load: PageServerLoad = async ({
   if (!session) {
     redirect(303, "/login")
   }
-
+  
   const { error: idError, customerId } = await getOrCreateCustomerId({
     supabaseServiceRole,
     session,
   })
   if (idError || !customerId) {
+    redirect(303, "/account")
     error(500, {
       message: "Unknown error. If issue persists, please contact us.",
     })
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async ({
     customerId,
   })
   if (fetchErr) {
+    redirect(303, "/account")
     error(500, {
       message: "Unknown error. If issue persists, please contact us.",
     })

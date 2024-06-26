@@ -1,5 +1,11 @@
 <script lang="ts">
   import PricingModule from "../../../(marketing)/pricing/pricing_module.svelte"
+  import { goto } from "$app/navigation"
+  import { onMount } from "svelte"
+
+  onMount(() => {
+    goto("/account")
+  })
 </script>
 
 <svelte:head>
