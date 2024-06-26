@@ -115,3 +115,9 @@ BEGIN
     RETURN EXISTS (SELECT 1 FROM auth.users WHERE auth.users.email = $1); -- Specify auth.users.email
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Add new columns
+ALTER TABLE public.profiles
+ADD COLUMN gender text null,
+ADD COLUMN date_of_birth date null,
+ADD COLUMN location text null;
