@@ -84,10 +84,6 @@ CREATE TABLE invitations (
 -- Enable Row Level Security (RLS)
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 
--- Create policy to allow users to view invitations they've sent
-CREATE POLICY "Users can view invitations they've sent" ON invitations
-  FOR SELECT USING (auth.uid() = invited_by);
-
 -- Create policy to allow users to insert new invitations
 CREATE POLICY "Users can create invitations" ON invitations
   FOR INSERT WITH CHECK (auth.uid() = invited_by);
@@ -96,8 +92,26 @@ CREATE POLICY "Users can create invitations" ON invitations
 CREATE POLICY "Users can update invitations they've sent" ON invitations
   FOR UPDATE USING (auth.uid() = invited_by);
 
+-- Policy for authenticated users and unauthenticated access
+CREATE POLICY "Anyone can read invitations with a valid token" ON invitations
+FOR SELECT
+USING (auth.uid() = invited_by OR auth.uid() IS NULL);
+
+-- Policy specifically for unauthenticated access
+CREATE POLICY "Unauthenticated users can read invitations with a valid token" ON invitations
+FOR SELECT
+TO public
+USING (auth.uid() IS NULL);
+
 -- Create index on email for faster lookups
 CREATE INDEX idx_invitations_email ON invitations(email);
 
 -- Create index on token for faster lookups
 CREATE INDEX idx_invitations_token ON invitations(token);
+
+CREATE OR REPLACE FUNCTION public.check_user_exists(email TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (SELECT 1 FROM auth.users WHERE auth.users.email = $1); -- Specify auth.users.email
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

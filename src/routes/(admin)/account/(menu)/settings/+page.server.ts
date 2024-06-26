@@ -5,7 +5,6 @@ import { Resend } from 'resend';
 import Mustache from 'mustache';
 import inlineCss from 'inline-css';
 import emailTemplates from '$lib/emailTemplates';
-
 const resend = new Resend(RESEND_API_KEY);
 
 export const actions: Actions = {
@@ -39,7 +38,22 @@ export const actions: Actions = {
     }
 
     try {
-      // Fetch the sender's name from the profiles table
+      const { data: existingUser, error: userError } = await supabase.rpc('check_user_exists', { email: recipientEmail });
+
+      if (userError) {
+        throw userError; // Handle database errors
+      }
+    
+      if (existingUser) {
+        // User exists, handle accordingly
+        return fail(400, { 
+          errorMessage: "A user with this email address already exists.", 
+          errorFields: ["inviteEmail"],
+          inviteEmail: recipientEmail,
+          inviteName: recipientName,
+        });
+      }
+            // Fetch the sender's name from the profiles table
       const { data: senderProfile, error: profileError } = await supabase
         .from('profiles')
         .select('full_name')
@@ -64,7 +78,7 @@ export const actions: Actions = {
       const templateData = {
         name: recipientName,
         invite_sender_name: senderName,
-        action_url: `${APP_URL}/invite/accept?token=${token}`,
+        action_url: `${APP_URL}/login/accept_invite?token=${token}`,
         support_email: 'support@ananda.app'
       };
 
