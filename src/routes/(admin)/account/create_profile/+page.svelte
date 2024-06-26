@@ -10,8 +10,9 @@
 
   let loading = false
   let fullName: string = profile?.full_name ?? ""
-  let companyName: string = profile?.company_name ?? ""
-  let website: string = profile?.website ?? ""
+  let gender: string = profile?.gender ?? ""
+  let dateOfBirth: string = profile?.date_of_birth ?? ""
+  let location: string = profile?.location ?? ""
 
   const fieldError = (liveForm: FormAccountUpdateResult, name: string) => {
     let errors = liveForm?.errorFields ?? []
@@ -62,36 +63,51 @@
         </div>
 
         <div class="mt-4">
-          <label for="companyName">
-            <span class="text-l text-center">Company Name</span>
+          <label for="gender">
+            <span class="text-l text-center">Gender</span>
           </label>
           <input
-            id="companyName"
-            name="companyName"
+            id="gender"
+            name="gender"
             type="text"
-            placeholder="Company name"
-            class="{fieldError(form, 'companyName')
+            placeholder="Your gender"
+            class="{fieldError(form, 'gender')
               ? 'input-error'
               : ''} mt-1 input input-bordered w-full max-w-xs"
-            value={form?.companyName ?? companyName}
+            value={form?.gender ?? gender}
             maxlength="50"
           />
         </div>
 
         <div class="mt-4">
-          <label for="website">
-            <span class="text-l text-center">Company Website</span>
+          <label for="dateOfBirth">
+            <span class="text-l text-center">Date of Birth</span>
           </label>
           <input
-            id="website"
-            name="website"
-            type="text"
-            placeholder="Company website"
-            class="{fieldError(form, 'website')
+            id="dateOfBirth"
+            name="dateOfBirth"
+            type="date"
+            class="{fieldError(form, 'dateOfBirth')
               ? 'input-error'
               : ''} mt-1 input input-bordered w-full max-w-xs"
-            value={form?.website ?? website}
-            maxlength="50"
+            value={form?.dateOfBirth ?? dateOfBirth}
+          />
+        </div>
+
+        <div class="mt-4">
+          <label for="location">
+            <span class="text-l text-center">Location</span>
+          </label>
+          <input
+            id="location"
+            name="location"
+            type="text"
+            placeholder="Your location"
+            class="{fieldError(form, 'location')
+              ? 'input-error'
+              : ''} mt-1 input input-bordered w-full max-w-xs"
+            value={form?.location ?? location}
+            maxlength="100"
           />
         </div>
 

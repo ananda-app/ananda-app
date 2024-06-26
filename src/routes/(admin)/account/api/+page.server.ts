@@ -196,15 +196,17 @@ export const actions = {
     if (!session) {
       redirect(303, "/login")
     }
-
+  
     const formData = await request.formData()
     const fullName = formData.get("fullName") as string
-    const companyName = formData.get("companyName") as string
-    const website = formData.get("website") as string
-
+    const gender = formData.get("gender") as string
+    const dateOfBirth = formData.get("dateOfBirth") as string
+    const location = formData.get("location") as string
+  
     let validationError
     const fieldMaxTextLength = 50
     const errorFields = []
+  
     if (!fullName) {
       validationError = "Name is required"
       errorFields.push("fullName")
@@ -212,53 +214,63 @@ export const actions = {
       validationError = `Name must be less than ${fieldMaxTextLength} characters`
       errorFields.push("fullName")
     }
-    if (!companyName) {
-      validationError =
-        "Company name is required. If this is a hobby project or personal app, please put your name."
-      errorFields.push("companyName")
-    } else if (companyName.length > fieldMaxTextLength) {
-      validationError = `Company name must be less than ${fieldMaxTextLength} characters`
-      errorFields.push("companyName")
+  
+    if (!gender) {
+      validationError = "Gender is required"
+      errorFields.push("gender")
+    } else if (gender.length > fieldMaxTextLength) {
+      validationError = `Gender must be less than ${fieldMaxTextLength} characters`
+      errorFields.push("gender")
     }
-    if (!website) {
-      validationError =
-        "Company website is required. An app store URL is a good alternative if you don't have a website."
-      errorFields.push("website")
-    } else if (website.length > fieldMaxTextLength) {
-      validationError = `Company website must be less than ${fieldMaxTextLength} characters`
-      errorFields.push("website")
+  
+    if (!dateOfBirth) {
+      validationError = "Date of Birth is required"
+      errorFields.push("dateOfBirth")
     }
+  
+    if (!location) {
+      validationError = "Location is required"
+      errorFields.push("location")
+    } else if (location.length > fieldMaxTextLength) {
+      validationError = `Location must be less than ${fieldMaxTextLength} characters`
+      errorFields.push("location")
+    }
+  
     if (validationError) {
       return fail(400, {
         errorMessage: validationError,
         errorFields,
         fullName,
-        companyName,
-        website,
+        gender,
+        dateOfBirth,
+        location,
       })
     }
-
+  
     const { error } = await supabase.from("profiles").upsert({
       id: session?.user.id,
       full_name: fullName,
-      company_name: companyName,
-      website: website,
+      gender: gender,
+      date_of_birth: dateOfBirth,
+      location: location,
       updated_at: new Date(),
     })
-
+  
     if (error) {
       return fail(500, {
         errorMessage: "Unknown error. If this persists please contact us.",
         fullName,
-        companyName,
-        website,
+        gender,
+        dateOfBirth,
+        location,
       })
     }
-
+  
     return {
       fullName,
-      companyName,
-      website,
+      gender,
+      dateOfBirth,
+      location,
     }
   },
   signout: async ({ locals: { supabase, safeGetSession } }) => {

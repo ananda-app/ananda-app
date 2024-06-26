@@ -21,15 +21,17 @@
   editable={false}
   fields={[
     { id: "fullName", label: "Name", initialValue: profile?.full_name ?? "" },
+    { id: "gender", label: "Gender", initialValue: profile?.gender ?? "" },
     {
-      id: "companyName",
-      label: "Company Name",
-      initialValue: profile?.company_name ?? "",
+      id: "dateOfBirth",
+      label: "Date of Birth",
+      initialValue: profile?.date_of_birth ?? "",
+      inputType: "date",
     },
     {
-      id: "website",
-      label: "Company Website",
-      initialValue: profile?.website ?? "",
+      id: "location",
+      label: "Location",
+      initialValue: profile?.location ?? "",
     },
   ]}
   editButtonTitle="Edit Profile"

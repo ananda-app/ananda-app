@@ -3,8 +3,9 @@ declare global {
     errorMessage?: string
     errorFields?: string[]
     fullName?: string
-    companyName?: string
-    website?: string
+    gender?: string
+    dateOfBirth?: string
+    location?: string
     email?: string
   }
 }

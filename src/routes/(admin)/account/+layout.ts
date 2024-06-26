@@ -44,10 +44,13 @@ export const _hasFullProfile = (
   if (!profile.full_name) {
     return false
   }
-  if (!profile.company_name) {
+  if (!profile.gender) {
     return false
   }
-  if (!profile.website) {
+  if (!profile.date_of_birth) {
+    return false
+  }
+  if (!profile.location) {
     return false
   }
 

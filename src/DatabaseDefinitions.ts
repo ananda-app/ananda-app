@@ -46,26 +46,29 @@ export interface Database {
         Row: {
           avatar_url: string | null
           full_name: string | null
+          gender: string | null
+          date_of_birth: string | null
+          location: string | null
           id: string
           updated_at: string | null
-          company_name: string | null
-          website: string | null
         }
         Insert: {
           avatar_url?: string | null
           full_name?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
+          location?: string | null
           id: string
           updated_at?: Date | null
-          company_name?: string | null
-          website?: string | null
         }
         Update: {
           avatar_url?: string | null
           full_name?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
+          location?: string | null
           id?: string
           updated_at?: string | null
-          company_name?: string | null
-          website?: string | null
         }
         Relationships: [
           {
