@@ -8,7 +8,7 @@
   </div>
   <div class="flex-none">
     <ul class="menu menu-horizontal px-1 hidden sm:flex font-bold text-lg">
-      <li class="md:mx-2"><a href="https://tally.so/r/w7DOZP">Waitlist</a></li>
+      <li class="md:mx-2"><a href="/login/sign_in">Sign In</a></li>
     </ul>
     <div class="dropdown dropdown-end sm:hidden">
       <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -33,7 +33,7 @@
         tabindex="0"
         class="menu menu-lg dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52 font-bold"
       >
-        <li><a href="https://tally.so/r/w7DOZP">Waitlist</a></li>
+        <li><a href="/login/sign_in">Sign In</a></li>
       </ul>
     </div>
   </div>
@@ -53,7 +53,7 @@
     <nav class="flex space-x-4">
       <a class="link link-hover" href="/">Overview</a>
       <a class="link link-hover" href="/contact_us">Contact Us</a>
-      <a class="link link-hover" href="https://tally.so/r/w7DOZP">Waitlist</a>
+      <a class="link link-hover" href="/login/sign_in">Sign In</a>
     </nav>
 
     <p>Made with ❤️ in 🇮🇳</p>

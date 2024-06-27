@@ -379,9 +379,10 @@
         which uses real-time biometric feedback to adjust your sessions.
       </div>
       <div class="mt-6 md:mt-2">
-        <a href="https://tally.so/r/w7DOZP">
-          <button class="btn btn-outline btn-primary btn-lg px-6 mt-3 mx-2"
-            >Join Waitlist</button
+        <a href="/login/sign_in">
+          <button
+            class="btn btn-primary btn-lg px-6 mt-3 mx-2 hover:bg-transparent hover:border hover:border-black hover:text-black"
+            >Try It Now</button
           >
         </a>
       </div>
