@@ -5,6 +5,8 @@ import { Resend } from 'resend';
 import Mustache from 'mustache';
 import inlineCss from 'inline-css';
 import emailTemplates from '$lib/emailTemplates';
+import { checkUserExists } from '$lib/supabaseHelpers';
+
 const resend = new Resend(RESEND_API_KEY);
 
 export const actions: Actions = {
@@ -38,14 +40,9 @@ export const actions: Actions = {
     }
 
     try {
-      const { data: existingUser, error: userError } = await supabase.rpc('check_user_exists', { email: recipientEmail });
+      const existingUser = await checkUserExists(supabase, recipientEmail);
 
-      if (userError) {
-        throw userError; // Handle database errors
-      }
-    
       if (existingUser) {
-        // User exists, handle accordingly
         return fail(400, { 
           errorMessage: "A user with this email address already exists.", 
           errorFields: ["inviteEmail"],
@@ -53,7 +50,8 @@ export const actions: Actions = {
           inviteName: recipientName,
         });
       }
-            // Fetch the sender's name from the profiles table
+
+      // Fetch the sender's name from the profiles table
       const { data: senderProfile, error: profileError } = await supabase
         .from('profiles')
         .select('full_name')

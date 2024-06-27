@@ -18,13 +18,4 @@ declare global {
   }
 }
 
-declare module '@supabase/supabase-js' {
-  interface SupabaseClient {
-    rpc(
-      fn: 'check_user_exists',
-      params: { email: string }
-    ): Promise<{ data: boolean | null; error: PostgrestError | null }>;
-  }
-}
-
 export {}

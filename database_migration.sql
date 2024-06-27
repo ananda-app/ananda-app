@@ -121,3 +121,13 @@ ALTER TABLE public.profiles
 ADD COLUMN gender text null,
 ADD COLUMN date_of_birth date null,
 ADD COLUMN location text null;
+
+create or replace function is_user_super_admin(user_id uuid)
+returns boolean as $$
+declare
+  is_admin boolean;
+begin
+  select is_super_admin into is_admin from auth.users where id = user_id;
+  return coalesce(is_admin, false);
+end;
+$$ language plpgsql security definer;
