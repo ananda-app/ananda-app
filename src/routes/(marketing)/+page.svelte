@@ -363,7 +363,7 @@
         class="text-4xl md:text-6xl font-bold px-2"
         style="line-height: 1.2;"
       >
-        Interactive
+        AI
         <span
           class="underline decoration-secondary decoration-4 md:decoration-[6px]"
           >guided meditation</span
@@ -375,8 +375,8 @@
         <span>feedback</span>
       </div>
       <div class="mt-6 md:mt-10 text-sm md:text-lg">
-        A next-gen guided meditation app using computer vision and AI to deliver
-        timely, personalized instructions.
+        Discover a uniquely personalized meditation experience with our app,
+        which uses real-time biometric feedback to adjust your sessions.
       </div>
       <div class="mt-6 md:mt-2">
         <a href="https://tally.so/r/w7DOZP">
