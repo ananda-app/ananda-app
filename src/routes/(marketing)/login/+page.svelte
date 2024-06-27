@@ -1,3 +1,12 @@
+<script>
+  import { goto } from "$app/navigation"
+  import { onMount } from "svelte"
+
+  onMount(() => {
+    goto("/login/sign_in")
+  })
+</script>
+
 <svelte:head>
   <title>Log In</title>
 </svelte:head>

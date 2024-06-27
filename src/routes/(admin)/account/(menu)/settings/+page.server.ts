@@ -13,7 +13,7 @@ export const actions: Actions = {
   invite: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession()
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login/sign_in")
     }
 
     const formData = await request.formData()

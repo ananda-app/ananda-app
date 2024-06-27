@@ -49,7 +49,6 @@
   supabaseClient={data.supabase}
   view="sign_in"
   redirectTo={`${data.url}/auth/callback`}
-  providers={oauthProviders}
   socialLayout="horizontal"
   showLinks={false}
   appearance={sharedAppearance}
@@ -59,5 +58,7 @@
   <a class="underline" href="/login/forgot_password">Forgot password?</a>
 </div>
 <div class="text-l text-slate-800 mt-3">
-  Don't have an account? <a class="underline" href="/login/sign_up">Sign up</a>.
+  Don't have an account? Request an <a class="underline" href="/contact_us"
+    >invite</a
+  >.
 </div>

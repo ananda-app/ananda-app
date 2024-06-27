@@ -17,7 +17,7 @@ export const actions: Actions = {
   default: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession();
     if (!session) {
-      throw redirect(303, "/login");
+      throw redirect(303, "/login/sign_in");
     }
 
     const formData = await request.formData();

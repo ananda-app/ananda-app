@@ -4,7 +4,7 @@ export const actions = {
   updateEmail: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession()
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login/sign_in")
     }
 
     const formData = await request.formData()
@@ -46,7 +46,7 @@ export const actions = {
   updatePassword: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession()
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login/sign_in")
     }
 
     const formData = await request.formData()
@@ -152,7 +152,7 @@ export const actions = {
   }) => {
     const { session } = await safeGetSession()
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login/sign_in")
     }
 
     const formData = await request.formData()
@@ -194,7 +194,7 @@ export const actions = {
   updateProfile: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession()
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login/sign_in")
     }
   
     const formData = await request.formData()
