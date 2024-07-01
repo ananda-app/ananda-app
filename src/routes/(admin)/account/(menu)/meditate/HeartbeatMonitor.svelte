@@ -17,6 +17,13 @@
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
 
+  let isVideoLoaded = false
+
+  function handleVideoLoaded() {
+    isVideoLoaded = true
+    initializeChart()
+  }
+
   async function loadOpenCv(uri: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const tag: HTMLScriptElement = document.createElement("script")
@@ -59,6 +66,8 @@
         ],
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
         animation: {
           duration: 0,
         },
@@ -131,7 +140,6 @@
 
   async function initializeApp() {
     await loadOpenCv(OPENCV_URI)
-    initializeChart()
 
     startTime = new Date()
     const demo = new Heartbeat(
@@ -162,36 +170,64 @@
 </script>
 
 <main>
-  <div class="video-container">
-    <video id={webcamId} width="360" height="640" autoplay muted></video>
-    <canvas id={canvasId} width="360" height="640"></canvas>
-  </div>
-  <div class="chart-container">
-    <canvas bind:this={chartCanvas} width="800" height="400"></canvas>
+  <div class="container">
+    <div class="video-container">
+      <video
+        id={webcamId}
+        on:loadedmetadata={handleVideoLoaded}
+        width="360"
+        height="640"
+        autoplay
+        muted
+      ></video>
+      <canvas id={canvasId} width="360" height="640"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas bind:this={chartCanvas}></canvas>
+    </div>
   </div>
 </main>
 
 <style>
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
   .video-container {
     position: relative;
-    width: 360px;
-    height: 640px;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 9/16;
   }
   #webcam,
   #canvas {
     position: absolute;
     top: 0;
     left: 0;
-  }
-  #webcam {
-    z-index: 1;
-  }
-  #canvas {
-    z-index: 2;
+    width: 100%;
+    height: 100%;
   }
   .chart-container {
-    margin-top: 20px;
-    width: 800px;
-    height: 400px;
+    width: 100%;
+    height: 250px;
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+    .video-container {
+      flex-shrink: 0;
+    }
+    .chart-container {
+      flex: 1;
+      min-width: 600px;
+    }
   }
 </style>
