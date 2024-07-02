@@ -16,6 +16,7 @@
   let chartCanvas: HTMLCanvasElement
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
+  const CHART_DURATION_SECONDS = 30
 
   let isVideoLoaded = false
 
@@ -79,7 +80,7 @@
               text: "Time (seconds)",
             },
             min: 0,
-            max: 120,
+            max: CHART_DURATION_SECONDS,
           },
           y: {
             beginAtZero: false,
@@ -125,13 +126,19 @@
     labels.push(elapsedSeconds)
     data.push(medianBpm)
 
-    while (labels.length > 0 && labels[0] < elapsedSeconds - 120) {
+    while (
+      labels.length > 0 &&
+      labels[0] < elapsedSeconds - CHART_DURATION_SECONDS
+    ) {
       labels.shift()
       data.shift()
     }
 
     if (chart.options && chart.options.scales && chart.options.scales.x) {
-      chart.options.scales.x.min = Math.max(0, elapsedSeconds - 120)
+      chart.options.scales.x.min = Math.max(
+        0,
+        elapsedSeconds - CHART_DURATION_SECONDS,
+      )
       chart.options.scales.x.max = elapsedSeconds
     }
 
@@ -142,7 +149,7 @@
     await loadOpenCv(OPENCV_URI)
 
     startTime = new Date()
-    const demo = new Heartbeat(
+    const heartbeatMonitor = new Heartbeat(
       webcamId,
       canvasId,
       HAARCASCADE_URI,
@@ -155,10 +162,10 @@
       },
     )
 
-    demo.init()
+    heartbeatMonitor.init()
 
     return () => {
-      demo.stop()
+      heartbeatMonitor.stop()
     }
   }
 
