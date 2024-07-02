@@ -8,8 +8,9 @@
     Chart as ChartType,
   } from "chart.js"
 
+  let heartRateBuffer: number[] = []
+  let chartUpdateInterval: ReturnType<typeof setInterval>
   let chart: ChartType
-  let heartRate: number = 0
   let startTime: Date
   let webcamId: string = "webcam"
   let canvasId: string = "canvas"
@@ -105,26 +106,15 @@
     if (!chart) return
 
     const now = new Date()
-    const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000
+    const elapsedSeconds = Math.floor(
+      (now.getTime() - startTime.getTime()) / 1000,
+    )
 
-    bpmHistory.push(bpm)
-    if (bpmHistory.length > medianFilterWindowSize) {
-      bpmHistory.shift()
-    }
-
-    const sortedHistory = [...bpmHistory].sort((a, b) => a - b)
-    const mid = Math.floor(sortedHistory.length / 2)
-    const medianBpm =
-      sortedHistory.length % 2 !== 0
-        ? sortedHistory[mid]
-        : (sortedHistory[mid - 1] + sortedHistory[mid]) / 2
-
-    // Explicitly cast the labels and data to the appropriate types
     const labels = chart.data.labels as number[]
     const data = chart.data.datasets[0].data as number[]
 
     labels.push(elapsedSeconds)
-    data.push(medianBpm)
+    data.push(bpm)
 
     while (
       labels.length > 0 &&
@@ -134,7 +124,7 @@
       data.shift()
     }
 
-    if (chart.options && chart.options.scales && chart.options.scales.x) {
+    if (chart.options?.scales?.x) {
       chart.options.scales.x.min = Math.max(
         0,
         elapsedSeconds - CHART_DURATION_SECONDS,
@@ -157,15 +147,25 @@
       6,
       250,
       (bpm: number) => {
-        heartRate = bpm
-        updateChart(bpm)
+        heartRateBuffer.push(parseFloat(bpm.toString()))
       },
     )
 
     heartbeatMonitor.init()
 
+    chartUpdateInterval = setInterval(() => {
+      if (heartRateBuffer.length > 0) {
+        const averageHeartRate =
+          heartRateBuffer.reduce((sum, rate) => sum + rate, 0) /
+          heartRateBuffer.length
+        updateChart(averageHeartRate)
+        heartRateBuffer = []
+      }
+    }, 1000)
+
     return () => {
       heartbeatMonitor.stop()
+      clearInterval(chartUpdateInterval)
     }
   }
 
