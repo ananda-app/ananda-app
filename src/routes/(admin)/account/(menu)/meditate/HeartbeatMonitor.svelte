@@ -9,12 +9,15 @@
   } from "chart.js"
 
   let heartRateBuffer: number[] = []
+  let breathingRateBuffer: number[] = []
   let chartUpdateInterval: ReturnType<typeof setInterval>
-  let chart: ChartType
+  let heartRateChart: ChartType
+  let breathingRateChart: ChartType
   let startTime: Date
   let webcamId: string = "webcam"
   let canvasId: string = "canvas"
-  let chartCanvas: HTMLCanvasElement
+  let heartRateChartCanvas: HTMLCanvasElement
+  let breathingRateChartCanvas: HTMLCanvasElement
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
   const CHART_DURATION_SECONDS = 30
@@ -23,7 +26,7 @@
 
   function handleVideoLoaded() {
     isVideoLoaded = true
-    initializeChart()
+    initializeCharts()
   }
 
   async function loadOpenCv(uri: string): Promise<void> {
@@ -49,8 +52,41 @@
     })
   }
 
-  function initializeChart(): void {
-    const ctx = chartCanvas?.getContext("2d")
+  function initializeCharts(): void {
+    initializeChart(
+      heartRateChartCanvas,
+      "Heart Rate (BPM)",
+      "BPM",
+      20,
+      120,
+      "rgb(75, 192, 192)", // Color for heart rate chart
+      (chart) => {
+        heartRateChart = chart
+      },
+    )
+    initializeChart(
+      breathingRateChartCanvas,
+      "Breathing Rate (BRPM)",
+      "BRPM",
+      0,
+      40,
+      "rgb(255, 99, 132)", // Color for breathing rate chart
+      (chart) => {
+        breathingRateChart = chart
+      },
+    )
+  }
+
+  function initializeChart(
+    canvas: HTMLCanvasElement,
+    label: string,
+    yAxisLabel: string,
+    yMin: number,
+    yMax: number,
+    borderColor: string,
+    setChart: (chart: ChartType) => void,
+  ): void {
+    const ctx = canvas?.getContext("2d")
     if (!ctx) return
 
     const config: ChartConfiguration = {
@@ -59,9 +95,9 @@
         labels: [],
         datasets: [
           {
-            label: "Heart Rate (BPM)",
+            label,
             data: [],
-            borderColor: "rgb(75, 192, 192)",
+            borderColor,
             tension: 0.1,
             fill: false,
           },
@@ -85,36 +121,42 @@
           },
           y: {
             beginAtZero: false,
-            min: 20,
-            max: 120,
+            min: yMin,
+            max: yMax,
             title: {
               display: true,
-              text: "BPM",
+              text: yAxisLabel,
             },
           },
         },
       },
     }
 
-    chart = new Chart(ctx, config)
+    const chart = new Chart(ctx, config)
+    setChart(chart)
   }
 
-  const medianFilterWindowSize: number = 5
-  let bpmHistory: number[] = []
+  function updateCharts(
+    elapsedSeconds: number,
+    avgHeartRate: number,
+    avgBreathingRate: number,
+  ): void {
+    updateChart(heartRateChart, avgHeartRate, elapsedSeconds)
+    updateChart(breathingRateChart, avgBreathingRate, elapsedSeconds)
+  }
 
-  function updateChart(bpm: number): void {
+  function updateChart(
+    chart: ChartType,
+    value: number,
+    elapsedSeconds: number,
+  ): void {
     if (!chart) return
-
-    const now = new Date()
-    const elapsedSeconds = Math.floor(
-      (now.getTime() - startTime.getTime()) / 1000,
-    )
 
     const labels = chart.data.labels as number[]
     const data = chart.data.datasets[0].data as number[]
 
     labels.push(elapsedSeconds)
-    data.push(bpm)
+    data.push(value)
 
     while (
       labels.length > 0 &&
@@ -146,20 +188,31 @@
       30,
       6,
       250,
-      (bpm: number) => {
-        heartRateBuffer.push(parseFloat(bpm.toString()))
+      ({ bpm, brpm }: { bpm: number; brpm: number }) => {
+        heartRateBuffer.push(bpm)
+        breathingRateBuffer.push(brpm)
       },
     )
-
     heartbeatMonitor.init()
 
     chartUpdateInterval = setInterval(() => {
-      if (heartRateBuffer.length > 0) {
-        const averageHeartRate =
+      if (heartRateBuffer.length > 0 || breathingRateBuffer.length > 0) {
+        const now = new Date()
+        const elapsedSeconds = Math.floor(
+          (now.getTime() - startTime.getTime()) / 1000,
+        )
+
+        const avgHeartRate =
           heartRateBuffer.reduce((sum, rate) => sum + rate, 0) /
           heartRateBuffer.length
-        updateChart(averageHeartRate)
+        const avgBreathingRate =
+          breathingRateBuffer.reduce((sum, rate) => sum + rate, 0) /
+          breathingRateBuffer.length
+
+        updateCharts(elapsedSeconds, avgHeartRate, avgBreathingRate)
+
         heartRateBuffer = []
+        breathingRateBuffer = []
       }
     }, 1000)
 
@@ -189,8 +242,13 @@
       ></video>
       <canvas id={canvasId} width="360" height="640"></canvas>
     </div>
-    <div class="chart-container">
-      <canvas bind:this={chartCanvas}></canvas>
+    <div class="charts-container">
+      <div class="chart-container">
+        <canvas bind:this={heartRateChartCanvas}></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas bind:this={breathingRateChartCanvas}></canvas>
+      </div>
     </div>
   </div>
 </main>
@@ -219,6 +277,13 @@
     width: 100%;
     height: 100%;
   }
+  .charts-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 600px;
+    gap: 20px;
+  }
   .chart-container {
     width: 100%;
     height: 250px;
@@ -232,7 +297,7 @@
     .video-container {
       flex-shrink: 0;
     }
-    .chart-container {
+    .charts-container {
       flex: 1;
       min-width: 600px;
     }

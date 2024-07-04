@@ -11,11 +11,13 @@ const MAX_CORNERS = 10;
 const MIN_CORNERS = 5;
 const QUALITY_LEVEL = 0.01;
 const MIN_DISTANCE = 10;
+const LOW_BRPM = 5;
+const HIGH_BRPM = 25;
 
 // Simple rPPG implementation in JavaScript
 // - Code could be improved given better documentation available for opencv.js
 export class Heartbeat {
-  constructor(webcamId, canvasId, classifierPath, targetFps, windowSize, rppgInterval, onBeatCallback) {
+  constructor(webcamId, canvasId, classifierPath, targetFps, windowSize, rppgInterval, callback) {
     this.webcamId = webcamId;
     this.canvasId = canvasId,
     this.classifierPath = classifierPath;
@@ -24,7 +26,7 @@ export class Heartbeat {
     this.targetFps = targetFps;
     this.windowSize = windowSize;
     this.rppgInterval = rppgInterval;
-    this.onBeatCallback = onBeatCallback;
+    this.callback = callback;
   }
   // Start the video stream
   async startStreaming() {
@@ -272,50 +274,91 @@ export class Heartbeat {
 
     return [res.data32F[0], res.data32F[1], res.data32F[2]];
   }
-  // Compute rppg signal and estimate HR
+  // Compute rppg signal and estimate HR and BR
   rppg() {
-    // Update fps
     let fps = this.getFps(this.timestamps);
-    // If valid signal is large enough: estimate
+
     if (this.signal.length >= this.targetFps * this.windowSize) {
-      // Work with cv.Mat from here
-      let signal = cv.matFromArray(this.signal.length, 1, cv.CV_32FC3,
-        [].concat.apply([], this.signal));
-      // Filtering
+      let signal = cv.matFromArray(this.signal.length, 1, cv.CV_32FC3, [].concat.apply([], this.signal));
+
       this.denoise(signal, this.rescan);
       this.standardize(signal);
       this.detrend(signal, fps);
-      this.movingAverage(signal, 3, Math.max(Math.floor(fps/6), 2));
-      // HR estimation
-      signal = this.selectGreen(signal);
-      // Draw time domain signal
-      this.overlayMask.setTo([0, 0, 0, 0]);
-      //this.drawTime(signal);
-      this.timeToFrequency(signal, true);
-      // Calculate band spectrum limits
-      let low = Math.floor(signal.rows * LOW_BPM / SEC_PER_MIN / fps);
-      let high = Math.ceil(signal.rows * HIGH_BPM / SEC_PER_MIN / fps);
-      if (!signal.empty()) {
-        // Mask for infeasible frequencies
-        let bandMask = cv.matFromArray(signal.rows, 1, cv.CV_8U,
-          new Array(signal.rows).fill(0).fill(1, low, high+1));
-        //this.drawFrequency(signal, low, high, bandMask);
-        // Identify feasible frequency with maximum magnitude
-        let result = cv.minMaxLoc(signal, bandMask);
-        bandMask.delete();
-        // Infer BPM
-        let bpm = result.maxLoc.y * fps / signal.rows * SEC_PER_MIN;
-        
-        // Use the callback to emit the heart rate
-        if (this.onBeatCallback) {
-          this.onBeatCallback(bpm.toFixed(0));
-        }
+      this.movingAverage(signal, 3, Math.max(Math.floor(fps / 6), 2));
+
+      // Heart rate estimation (green channel)
+      let greenChannel = this.selectGreen(signal);
+      this.timeToFrequency(greenChannel, true);
+      let bpm = this.estimateRate(greenChannel, LOW_BPM, HIGH_BPM, fps);
+
+      // Breathing rate estimation (red channel)
+      let redChannel = this.selectRed(signal);
+      let breathingSignal = this.butterworthBandPassFilter(redChannel, 0.1, 0.4, fps);
+      this.timeToFrequency(breathingSignal, true);
+      let brpm = this.estimateRate(breathingSignal, LOW_BRPM, HIGH_BRPM, fps);
+
+      if (this.callback) {
+        this.callback({ bpm: parseFloat(bpm.toFixed(0)), brpm: parseFloat(brpm.toFixed(0)) });
       }
-      signal.delete();
-    } else {
-      console.log("signal too small");
+
+      greenChannel.delete();
+      redChannel.delete();
+      breathingSignal.delete();
     }
   }
+
+  // Extract red channel
+  selectRed(signal) {
+    let rgb = new cv.MatVector();
+    cv.split(signal, rgb);
+    let result = rgb.get(2); // 2 corresponds to the red channel
+    rgb.delete();
+    return result;
+  }
+
+  // Band-Pass Butterworth Filter Implementation
+  butterworthBandPassFilter(signal, lowCutoff = 0.2, highCutoff = 0.8, fps) {
+    let nyquist = 0.5 * fps;
+    let lowNormalizedCutoff = lowCutoff / nyquist;
+    let highNormalizedCutoff = highCutoff / nyquist;
+
+    // Calculate the Butterworth filter coefficients for a 2nd-order filter
+    let thetaLow = Math.PI * lowNormalizedCutoff;
+    let thetaHigh = Math.PI * highNormalizedCutoff;
+    let bandwidth = thetaHigh - thetaLow;
+    let centerFrequency = Math.sqrt(thetaLow * thetaHigh);
+
+    let d = Math.cos(centerFrequency) / Math.sin(centerFrequency);
+    let beta = 0.5 * ((1 - d) / (1 + d));
+    let gamma = (0.5 + beta) * Math.cos(centerFrequency);
+    let alpha = (0.5 + beta - gamma) / 2;
+
+    let b = [alpha, 0, -alpha];
+    let a = [1, -2 * gamma, 2 * beta];
+
+    let filteredSignal = new cv.Mat(signal.rows, 1, cv.CV_32FC1);
+    let z = [0, 0]; // Initialize delay elements
+
+    for (let i = 0; i < signal.rows; i++) {
+      let x = signal.data32F[i];
+      let y = b[0] * x + z[0];
+      z[0] = b[1] * x + z[1] - a[1] * y;
+      z[1] = b[2] * x - a[2] * y;
+      filteredSignal.data32F[i] = y;
+    }
+
+    return filteredSignal;
+  }  
+
+  estimateRate(channel, lowLimit, highLimit, fps) {
+    let lowIndex = Math.floor(channel.rows * lowLimit / SEC_PER_MIN / fps);
+    let highIndex = Math.ceil(channel.rows * highLimit / SEC_PER_MIN / fps);
+    let bandMask = cv.matFromArray(channel.rows, 1, cv.CV_8U, new Array(channel.rows).fill(0).fill(1, lowIndex, highIndex + 1));
+    let result = cv.minMaxLoc(channel, bandMask);
+    bandMask.delete();
+    return result.maxLoc.y * fps / channel.rows * SEC_PER_MIN;
+  }
+
   // Calculate fps from timestamps
   getFps(timestamps, timeBase=1000) {
     if (Array.isArray(timestamps) && timestamps.length) {
@@ -395,8 +438,23 @@ export class Heartbeat {
   }
   // Moving average on signal
   movingAverage(signal, n, kernelSize) {
-    for (var i = 0; i < n; i++) {
-      cv.blur(signal, signal, {height: kernelSize, width: 1});
+    let kernel = new Array(kernelSize).fill(1 / kernelSize);
+
+    for (let i = 0; i < n; i++) {
+      let smoothedSignal = new cv.Mat(signal.rows, 1, cv.CV_32FC1);
+
+      for (let j = 0; j < signal.rows; j++) {
+        let sum = 0;
+        for (let k = 0; k < kernelSize; k++) {
+          if (j - k >= 0) {
+            sum += signal.data32F[j - k] * kernel[k];
+          }
+        }
+        smoothedSignal.data32F[j] = sum;
+      }
+
+      signal = smoothedSignal.clone();
+      smoothedSignal.delete();
     }
   }
   // TODO solve this more elegantly
