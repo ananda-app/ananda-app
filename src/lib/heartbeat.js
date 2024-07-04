@@ -2,17 +2,11 @@
 
 const RESCAN_INTERVAL = 1000;
 const DEFAULT_FPS = 30;
-const LOW_BPM = 42;
-const HIGH_BPM = 240;
-const REL_MIN_FACE_SIZE = 0.4;
-const SEC_PER_MIN = 60;
 const MSEC_PER_SEC = 1000;
 const MAX_CORNERS = 10;
 const MIN_CORNERS = 5;
 const QUALITY_LEVEL = 0.01;
 const MIN_DISTANCE = 10;
-const LOW_BRPM = 5;
-const HIGH_BRPM = 25;
 
 // Simple rPPG implementation in JavaScript
 // - Code could be improved given better documentation available for opencv.js
@@ -28,6 +22,13 @@ export class Heartbeat {
     this.brWindowSize = brWindowSize;
     this.rppgInterval = rppgInterval;
     this.callback = callback;
+
+    this.worker = new Worker('/heartbeat-worker.js');
+    this.worker.onmessage = (e) => {
+      if (this.callback) {
+        this.callback(e.data);
+      }
+    };
   }
   // Start the video stream
   async startStreaming() {
@@ -286,109 +287,18 @@ export class Heartbeat {
   // Compute rppg signal and estimate HR and BR
   rppg() {
     let fps = this.getFps(this.timestamps);
-  
+
     if (this.signal.length >= fps) {
-      // Use the most recent 30 seconds of data for heart rate
-      let hrWindowFrames = fps * this.hrWindowSize;
-      let hrSignal = this.signal.slice(-hrWindowFrames);
-      let hrRescan = this.rescan.slice(-hrWindowFrames);
-  
-      let hrMat = cv.matFromArray(hrSignal.length, 1, cv.CV_32FC3, [].concat.apply([], hrSignal));
-  
-      this.denoise(hrMat, hrRescan);
-      this.standardize(hrMat);
-      this.detrend(hrMat, fps);
-      this.movingAverage(hrMat, 3, Math.max(Math.floor(fps / 6), 2));
-  
-      let greenChannel = this.selectGreen(hrMat);
-      this.timeToFrequency(greenChannel, true);
-      let bpm = this.estimateRate(greenChannel, LOW_BPM, HIGH_BPM, fps);
-  
-      greenChannel.delete();
-      hrMat.delete();
-  
-      // Use a different window size for breathing rate
-      let brWindowFrames = fps * this.brWindowSize;
-      let brSignal = this.signal.slice(-brWindowFrames);
-      let brTimestamps = this.timestamps.slice(-brWindowFrames);
-      let brRescan = this.rescan.slice(-brWindowFrames);
-  
-      let brMat = cv.matFromArray(brSignal.length, 1, cv.CV_32FC3, [].concat.apply([], brSignal));
-  
-      this.denoise(brMat, brRescan);
-      this.standardize(brMat);
-      this.detrend(brMat, fps);
-      this.movingAverage(brMat, 3, Math.max(Math.floor(fps / 6), 2));
-  
-      let redChannel = this.selectRed(brMat);
-      let breathingSignal = this.butterworthBandPassFilter(redChannel, 0.1, 0.4, fps);
-      this.timeToFrequency(breathingSignal, true);
-      let brpm = this.estimateRate(breathingSignal, LOW_BRPM, HIGH_BRPM, fps);
-  
-      redChannel.delete();
-      breathingSignal.delete();
-      brMat.delete();
-  
-      if (this.callback) {
-        this.callback({ 
-          bpm: parseFloat(bpm.toFixed(0)), 
-          brpm: parseFloat(brpm.toFixed(0)),
-          timestamp: brTimestamps[brTimestamps.length - 1]
-        });
-      }
+      this.worker.postMessage({
+        signal: this.signal,
+        timestamps: this.timestamps,
+        fps: fps,
+        hrWindowSize: this.hrWindowSize,
+        brWindowSize: this.brWindowSize,
+        rescan: this.rescan,
+        callbackData: { timestamp: this.timestamps[this.timestamps.length - 1] }
+      });
     }
-  }
-
-  // Extract red channel
-  selectRed(signal) {
-    let rgb = new cv.MatVector();
-    cv.split(signal, rgb);
-    let result = rgb.get(2); // 2 corresponds to the red channel
-    rgb.delete();
-    return result;
-  }
-
-  // Band-Pass Butterworth Filter Implementation
-  butterworthBandPassFilter(signal, lowCutoff = 0.2, highCutoff = 0.8, fps) {
-    let nyquist = 0.5 * fps;
-    let lowNormalizedCutoff = lowCutoff / nyquist;
-    let highNormalizedCutoff = highCutoff / nyquist;
-
-    // Calculate the Butterworth filter coefficients for a 2nd-order filter
-    let thetaLow = Math.PI * lowNormalizedCutoff;
-    let thetaHigh = Math.PI * highNormalizedCutoff;
-    let bandwidth = thetaHigh - thetaLow;
-    let centerFrequency = Math.sqrt(thetaLow * thetaHigh);
-
-    let d = Math.cos(centerFrequency) / Math.sin(centerFrequency);
-    let beta = 0.5 * ((1 - d) / (1 + d));
-    let gamma = (0.5 + beta) * Math.cos(centerFrequency);
-    let alpha = (0.5 + beta - gamma) / 2;
-
-    let b = [alpha, 0, -alpha];
-    let a = [1, -2 * gamma, 2 * beta];
-
-    let filteredSignal = new cv.Mat(signal.rows, 1, cv.CV_32FC1);
-    let z = [0, 0]; // Initialize delay elements
-
-    for (let i = 0; i < signal.rows; i++) {
-      let x = signal.data32F[i];
-      let y = b[0] * x + z[0];
-      z[0] = b[1] * x + z[1] - a[1] * y;
-      z[1] = b[2] * x - a[2] * y;
-      filteredSignal.data32F[i] = y;
-    }
-
-    return filteredSignal;
-  }  
-
-  estimateRate(channel, lowLimit, highLimit, fps) {
-    let lowIndex = Math.floor(channel.rows * lowLimit / SEC_PER_MIN / fps);
-    let highIndex = Math.ceil(channel.rows * highLimit / SEC_PER_MIN / fps);
-    let bandMask = cv.matFromArray(channel.rows, 1, cv.CV_8U, new Array(channel.rows).fill(0).fill(1, lowIndex, highIndex + 1));
-    let result = cv.minMaxLoc(channel, bandMask);
-    bandMask.delete();
-    return result.maxLoc.y * fps / channel.rows * SEC_PER_MIN;
   }
 
   // Calculate fps from timestamps
@@ -404,115 +314,7 @@ export class Heartbeat {
       return DEFAULT_FPS;
     }
   }
-  // Remove noise from face rescanning
-  denoise(signal, rescan) {
-    let diff = new cv.Mat();
-    cv.subtract(signal.rowRange(1, signal.rows), signal.rowRange(0, signal.rows-1), diff);
-    for (var i = 1; i < signal.rows; i++) {
-      if (rescan[i] == true) {
-        let adjV = new cv.MatVector();
-        let adjR = cv.matFromArray(signal.rows, 1, cv.CV_32FC1,
-          new Array(signal.rows).fill(0).fill(diff.data32F[(i-1)*3], i, signal.rows));
-        let adjG = cv.matFromArray(signal.rows, 1, cv.CV_32FC1,
-          new Array(signal.rows).fill(0).fill(diff.data32F[(i-1)*3+1], i, signal.rows));
-        let adjB = cv.matFromArray(signal.rows, 1, cv.CV_32FC1,
-          new Array(signal.rows).fill(0).fill(diff.data32F[(i-1)*3+2], i, signal.rows));
-        adjV.push_back(adjR); adjV.push_back(adjG); adjV.push_back(adjB);
-        let adj = new cv.Mat();
-        cv.merge(adjV, adj);
-        cv.subtract(signal, adj, signal);
-        adjV.delete(); adjR.delete(); adjG.delete(); adjB.delete();
-        adj.delete();
-      }
-    }
-    diff.delete();
-  }
-  // Standardize signal
-  standardize(signal) {
-    let mean = new cv.Mat();
-    let stdDev = new cv.Mat();
-    let t1 = new cv.Mat();
-    cv.meanStdDev(signal, mean, stdDev, t1);
-    let means_c3 = cv.matFromArray(1, 1, cv.CV_32FC3, [mean.data64F[0], mean.data64F[1], mean.data64F[2]]);
-    let stdDev_c3 = cv.matFromArray(1, 1, cv.CV_32FC3, [stdDev.data64F[0], stdDev.data64F[1], stdDev.data64F[2]]);
-    let means = new cv.Mat(signal.rows, 1, cv.CV_32FC3);
-    let stdDevs = new cv.Mat(signal.rows, 1, cv.CV_32FC3);
-    cv.repeat(means_c3, signal.rows, 1, means);
-    cv.repeat(stdDev_c3, signal.rows, 1, stdDevs);
-    cv.subtract(signal, means, signal, t1, -1);
-    cv.divide(signal, stdDevs, signal, 1, -1);
-    mean.delete(); stdDev.delete(); t1.delete();
-    means_c3.delete(); stdDev_c3.delete();
-    means.delete(); stdDevs.delete();
-  }
-  // Remove trend in signal
-  detrend(signal, lambda) {
-    let h = cv.Mat.zeros(signal.rows-2, signal.rows, cv.CV_32FC1);
-    let i = cv.Mat.eye(signal.rows, signal.rows, cv.CV_32FC1);
-    let t1 = cv.Mat.ones(signal.rows-2, 1, cv.CV_32FC1)
-    let t2 = cv.matFromArray(signal.rows-2, 1, cv.CV_32FC1,
-      new Array(signal.rows-2).fill(-2));
-    let t3 = new cv.Mat();
-    t1.copyTo(h.diag(0)); t2.copyTo(h.diag(1)); t1.copyTo(h.diag(2));
-    cv.gemm(h, h, lambda*lambda, t3, 0, h, cv.GEMM_1_T);
-    cv.add(i, h, h, t3, -1);
-    cv.invert(h, h, cv.DECOMP_LU);
-    cv.subtract(i, h, h, t3, -1);
-    let s = new cv.MatVector();
-    cv.split(signal, s);
-    cv.gemm(h, s.get(0), 1, t3, 0, s.get(0), 0);
-    cv.gemm(h, s.get(1), 1, t3, 0, s.get(1), 0);
-    cv.gemm(h, s.get(2), 1, t3, 0, s.get(2), 0);
-    cv.merge(s, signal);
-    h.delete(); i.delete();
-    t1.delete(); t2.delete(); t3.delete();
-    s.delete();
-  }
-  // Moving average on signal
-  movingAverage(signal, n, kernelSize) {
-    let kernel = new Array(kernelSize).fill(1 / kernelSize);
 
-    for (let i = 0; i < n; i++) {
-      let smoothedSignal = new cv.Mat(signal.rows, 1, cv.CV_32FC1);
-
-      for (let j = 0; j < signal.rows; j++) {
-        let sum = 0;
-        for (let k = 0; k < kernelSize; k++) {
-          if (j - k >= 0) {
-            sum += signal.data32F[j - k] * kernel[k];
-          }
-        }
-        smoothedSignal.data32F[j] = sum;
-      }
-
-      signal = smoothedSignal.clone();
-      smoothedSignal.delete();
-    }
-  }
-  // TODO solve this more elegantly
-  selectGreen(signal) {
-    let rgb = new cv.MatVector();
-    cv.split(signal, rgb);
-    // TODO possible memory leak, delete rgb?
-    let result = rgb.get(1);
-    rgb.delete();
-    return result;
-  }
-  // Convert from time to frequency domain
-  timeToFrequency(signal, magnitude) {
-    // Prepare planes
-    let planes = new cv.MatVector();
-    planes.push_back(signal);
-    planes.push_back(new cv.Mat.zeros(signal.rows, 1, cv.CV_32F))
-    let powerSpectrum = new cv.Mat();
-    cv.merge(planes, signal);
-    // Fourier transform
-    cv.dft(signal, signal, cv.DFT_COMPLEX_OUTPUT);
-    if (magnitude) {
-      cv.split(signal, planes);
-      cv.magnitude(planes.get(0), planes.get(1), signal);
-    }
-  }
   // Draw time domain signal to overlayMask
   drawTime(signal) {
     // Display size
