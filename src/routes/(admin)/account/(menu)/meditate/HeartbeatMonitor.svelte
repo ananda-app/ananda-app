@@ -2,11 +2,7 @@
   import { onMount } from "svelte"
   import { Heartbeat } from "$lib/heartbeat.js"
   import Chart from "chart.js/auto"
-  import type {
-    ChartConfiguration,
-    ChartData,
-    Chart as ChartType,
-  } from "chart.js"
+  import type { ChartConfiguration, Chart as ChartType } from "chart.js"
 
   let heartRateBuffer: number[] = []
   let breathingRateBuffer: number[] = []
@@ -21,6 +17,8 @@
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
   const CHART_DURATION_SECONDS = 30
+  const WINDOW_SIZE = 30 // seconds
+  const RPPG_INTERVAL = 1000 // Convert to milliseconds
 
   let isVideoLoaded = false
 
@@ -185,36 +183,47 @@
       webcamId,
       canvasId,
       HAARCASCADE_URI,
-      30,
-      6,
-      250,
-      ({ bpm, brpm }: { bpm: number; brpm: number }) => {
-        heartRateBuffer.push(bpm)
-        breathingRateBuffer.push(brpm)
+      30, // fps
+      WINDOW_SIZE, // windowSize
+      RPPG_INTERVAL, // rppgInterval
+      ({
+        bpm,
+        brpm,
+        timestamp,
+      }: {
+        bpm: number
+        brpm: number
+        timestamp: number
+      }) => {
+        const elapsedSeconds = Math.floor(
+          (timestamp - startTime.getTime()) / 1000,
+        )
+
+        updateCharts(elapsedSeconds, bpm, brpm)
       },
     )
     heartbeatMonitor.init()
 
-    chartUpdateInterval = setInterval(() => {
-      if (heartRateBuffer.length > 0 || breathingRateBuffer.length > 0) {
-        const now = new Date()
-        const elapsedSeconds = Math.floor(
-          (now.getTime() - startTime.getTime()) / 1000,
-        )
+    // chartUpdateInterval = setInterval(() => {
+    //   if (heartRateBuffer.length > 0 || breathingRateBuffer.length > 0) {
+    //     const now = new Date()
+    //     const elapsedSeconds = Math.floor(
+    //       (now.getTime() - startTime.getTime()) / 1000,
+    //     )
 
-        const avgHeartRate =
-          heartRateBuffer.reduce((sum, rate) => sum + rate, 0) /
-          heartRateBuffer.length
-        const avgBreathingRate =
-          breathingRateBuffer.reduce((sum, rate) => sum + rate, 0) /
-          breathingRateBuffer.length
+    //     const avgHeartRate =
+    //       heartRateBuffer.reduce((sum, rate) => sum + rate, 0) /
+    //       heartRateBuffer.length
+    //     const avgBreathingRate =
+    //       breathingRateBuffer.reduce((sum, rate) => sum + rate, 0) /
+    //       breathingRateBuffer.length
 
-        updateCharts(elapsedSeconds, avgHeartRate, avgBreathingRate)
+    //     updateCharts(elapsedSeconds, avgHeartRate, avgBreathingRate)
 
-        heartRateBuffer = []
-        breathingRateBuffer = []
-      }
-    }, 1000)
+    //     heartRateBuffer = []
+    //     breathingRateBuffer = []
+    //   }
+    // }, 1000)
 
     return () => {
       heartbeatMonitor.stop()

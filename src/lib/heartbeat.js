@@ -118,6 +118,7 @@ export class Heartbeat {
       let time = Date.now()
       let rescanFlag = false;
       cv.cvtColor(this.frameRGB, this.frameGray, cv.COLOR_RGBA2GRAY);
+      
       // Need to find the face
       if (!this.faceValid) {
         this.lastScanTime = time;
@@ -131,32 +132,39 @@ export class Heartbeat {
       }
       // Track face
       else {
-        // Disable for now,
-        //this.trackFace(this.lastFrameGray, this.frameGray);
+        // Uncomment if you want to use face tracking
+        // this.trackFace(this.lastFrameGray, this.frameGray);
       }
+  
       // Update the signal
       if (this.faceValid) {
-        // Shift signal buffer
-        while (this.signal.length > this.targetFps * this.windowSize) {
-          this.signal.shift();
-          this.timestamps.shift();
-          this.rescan.shift();
-        }
         // Get mask
         let mask = new cv.Mat();
         mask = this.makeMask(this.frameGray, this.face);
+        
         // New values
         let means = cv.mean(this.frameRGB, mask);
         mask.delete();
+  
         // Add new values to raw signal buffer
         this.signal.push(means.slice(0, 3));
         this.timestamps.push(time);
         this.rescan.push(rescanFlag);
+  
+        // Remove old data if buffer is too large
+        let maxBufferSize = this.targetFps * this.windowSize * 2;
+        while (this.signal.length > maxBufferSize) {
+          this.signal.shift();
+          this.timestamps.shift();
+          this.rescan.shift();
+        }
       }
+  
       // Draw face
       cv.rectangle(this.frameRGB, new cv.Point(this.face.x, this.face.y),
         new cv.Point(this.face.x+this.face.width, this.face.y+this.face.height),
         [0, 255, 0, 255]);
+      
       // Apply overlayMask
       this.frameRGB.setTo([255, 0, 0, 255], this.overlayMask);
       cv.imshow(this.canvasId, this.frameRGB);
@@ -277,33 +285,44 @@ export class Heartbeat {
   // Compute rppg signal and estimate HR and BR
   rppg() {
     let fps = this.getFps(this.timestamps);
-
-    if (this.signal.length >= this.targetFps * this.windowSize) {
-      let signal = cv.matFromArray(this.signal.length, 1, cv.CV_32FC3, [].concat.apply([], this.signal));
-
-      this.denoise(signal, this.rescan);
+  
+    if (this.signal.length >= fps) {
+      // Use the most recent 30 seconds of data
+      let windowFrames = fps * this.windowSize;
+      let recentSignal = this.signal.slice(-windowFrames);
+      let recentTimestamps = this.timestamps.slice(-windowFrames);
+      let recentRescan = this.rescan.slice(-windowFrames);
+  
+      let signal = cv.matFromArray(recentSignal.length, 1, cv.CV_32FC3, [].concat.apply([], recentSignal));
+  
+      this.denoise(signal, recentRescan);
       this.standardize(signal);
       this.detrend(signal, fps);
       this.movingAverage(signal, 3, Math.max(Math.floor(fps / 6), 2));
-
+  
       // Heart rate estimation (green channel)
       let greenChannel = this.selectGreen(signal);
       this.timeToFrequency(greenChannel, true);
       let bpm = this.estimateRate(greenChannel, LOW_BPM, HIGH_BPM, fps);
-
+  
       // Breathing rate estimation (red channel)
       let redChannel = this.selectRed(signal);
       let breathingSignal = this.butterworthBandPassFilter(redChannel, 0.1, 0.4, fps);
       this.timeToFrequency(breathingSignal, true);
       let brpm = this.estimateRate(breathingSignal, LOW_BRPM, HIGH_BRPM, fps);
-
+  
       if (this.callback) {
-        this.callback({ bpm: parseFloat(bpm.toFixed(0)), brpm: parseFloat(brpm.toFixed(0)) });
+        this.callback({ 
+          bpm: parseFloat(bpm.toFixed(0)), 
+          brpm: parseFloat(brpm.toFixed(0)),
+          timestamp: recentTimestamps[recentTimestamps.length - 1]
+        });
       }
-
+  
       greenChannel.delete();
       redChannel.delete();
       breathingSignal.delete();
+      signal.delete();
     }
   }
 
