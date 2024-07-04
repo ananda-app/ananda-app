@@ -17,14 +17,15 @@ const HIGH_BRPM = 25;
 // Simple rPPG implementation in JavaScript
 // - Code could be improved given better documentation available for opencv.js
 export class Heartbeat {
-  constructor(webcamId, canvasId, classifierPath, targetFps, windowSize, rppgInterval, callback) {
+  constructor(webcamId, canvasId, classifierPath, targetFps, hrWindowSize, brWindowSize, rppgInterval, callback) {
     this.webcamId = webcamId;
-    this.canvasId = canvasId,
+    this.canvasId = canvasId;
     this.classifierPath = classifierPath;
     this.streaming = false;
     this.faceValid = false;
     this.targetFps = targetFps;
-    this.windowSize = windowSize;
+    this.hrWindowSize = hrWindowSize; 
+    this.brWindowSize = brWindowSize;
     this.rppgInterval = rppgInterval;
     this.callback = callback;
   }
@@ -287,42 +288,54 @@ export class Heartbeat {
     let fps = this.getFps(this.timestamps);
   
     if (this.signal.length >= fps) {
-      // Use the most recent 30 seconds of data
-      let windowFrames = fps * this.windowSize;
-      let recentSignal = this.signal.slice(-windowFrames);
-      let recentTimestamps = this.timestamps.slice(-windowFrames);
-      let recentRescan = this.rescan.slice(-windowFrames);
+      // Use the most recent 30 seconds of data for heart rate
+      let hrWindowFrames = fps * this.hrWindowSize;
+      let hrSignal = this.signal.slice(-hrWindowFrames);
+      let hrRescan = this.rescan.slice(-hrWindowFrames);
   
-      let signal = cv.matFromArray(recentSignal.length, 1, cv.CV_32FC3, [].concat.apply([], recentSignal));
+      let hrMat = cv.matFromArray(hrSignal.length, 1, cv.CV_32FC3, [].concat.apply([], hrSignal));
   
-      this.denoise(signal, recentRescan);
-      this.standardize(signal);
-      this.detrend(signal, fps);
-      this.movingAverage(signal, 3, Math.max(Math.floor(fps / 6), 2));
+      this.denoise(hrMat, hrRescan);
+      this.standardize(hrMat);
+      this.detrend(hrMat, fps);
+      this.movingAverage(hrMat, 3, Math.max(Math.floor(fps / 6), 2));
   
-      // Heart rate estimation (green channel)
-      let greenChannel = this.selectGreen(signal);
+      let greenChannel = this.selectGreen(hrMat);
       this.timeToFrequency(greenChannel, true);
       let bpm = this.estimateRate(greenChannel, LOW_BPM, HIGH_BPM, fps);
   
-      // Breathing rate estimation (red channel)
-      let redChannel = this.selectRed(signal);
+      greenChannel.delete();
+      hrMat.delete();
+  
+      // Use a different window size for breathing rate
+      let brWindowFrames = fps * this.brWindowSize;
+      let brSignal = this.signal.slice(-brWindowFrames);
+      let brTimestamps = this.timestamps.slice(-brWindowFrames);
+      let brRescan = this.rescan.slice(-brWindowFrames);
+  
+      let brMat = cv.matFromArray(brSignal.length, 1, cv.CV_32FC3, [].concat.apply([], brSignal));
+  
+      this.denoise(brMat, brRescan);
+      this.standardize(brMat);
+      this.detrend(brMat, fps);
+      this.movingAverage(brMat, 3, Math.max(Math.floor(fps / 6), 2));
+  
+      let redChannel = this.selectRed(brMat);
       let breathingSignal = this.butterworthBandPassFilter(redChannel, 0.1, 0.4, fps);
       this.timeToFrequency(breathingSignal, true);
       let brpm = this.estimateRate(breathingSignal, LOW_BRPM, HIGH_BRPM, fps);
+  
+      redChannel.delete();
+      breathingSignal.delete();
+      brMat.delete();
   
       if (this.callback) {
         this.callback({ 
           bpm: parseFloat(bpm.toFixed(0)), 
           brpm: parseFloat(brpm.toFixed(0)),
-          timestamp: recentTimestamps[recentTimestamps.length - 1]
+          timestamp: brTimestamps[brTimestamps.length - 1]
         });
       }
-  
-      greenChannel.delete();
-      redChannel.delete();
-      breathingSignal.delete();
-      signal.delete();
     }
   }
 

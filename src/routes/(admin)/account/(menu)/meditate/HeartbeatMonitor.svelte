@@ -4,9 +4,6 @@
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
 
-  let heartRateBuffer: number[] = []
-  let breathingRateBuffer: number[] = []
-  let chartUpdateInterval: ReturnType<typeof setInterval>
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
   let startTime: Date
@@ -17,8 +14,9 @@
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
   const CHART_DURATION_SECONDS = 30
-  const WINDOW_SIZE = 30 // seconds
-  const RPPG_INTERVAL = 1000 // Convert to milliseconds
+  const HR_WINDOW_SIZE = 30 // seconds
+  const BR_WINDOW_SIZE = 60 // seconds
+  const RPPG_INTERVAL = 1000 // milliseconds
 
   let isVideoLoaded = false
 
@@ -134,15 +132,6 @@
     setChart(chart)
   }
 
-  function updateCharts(
-    elapsedSeconds: number,
-    avgHeartRate: number,
-    avgBreathingRate: number,
-  ): void {
-    updateChart(heartRateChart, avgHeartRate, elapsedSeconds)
-    updateChart(breathingRateChart, avgBreathingRate, elapsedSeconds)
-  }
-
   function updateChart(
     chart: ChartType,
     value: number,
@@ -184,7 +173,8 @@
       canvasId,
       HAARCASCADE_URI,
       30, // fps
-      WINDOW_SIZE, // windowSize
+      HR_WINDOW_SIZE, // hrWindowSize
+      BR_WINDOW_SIZE, // brWindowSize
       RPPG_INTERVAL, // rppgInterval
       ({
         bpm,
@@ -199,35 +189,14 @@
           (timestamp - startTime.getTime()) / 1000,
         )
 
-        updateCharts(elapsedSeconds, bpm, brpm)
+        updateChart(heartRateChart, bpm, elapsedSeconds)
+        updateChart(breathingRateChart, brpm, elapsedSeconds)
       },
     )
     heartbeatMonitor.init()
 
-    // chartUpdateInterval = setInterval(() => {
-    //   if (heartRateBuffer.length > 0 || breathingRateBuffer.length > 0) {
-    //     const now = new Date()
-    //     const elapsedSeconds = Math.floor(
-    //       (now.getTime() - startTime.getTime()) / 1000,
-    //     )
-
-    //     const avgHeartRate =
-    //       heartRateBuffer.reduce((sum, rate) => sum + rate, 0) /
-    //       heartRateBuffer.length
-    //     const avgBreathingRate =
-    //       breathingRateBuffer.reduce((sum, rate) => sum + rate, 0) /
-    //       breathingRateBuffer.length
-
-    //     updateCharts(elapsedSeconds, avgHeartRate, avgBreathingRate)
-
-    //     heartRateBuffer = []
-    //     breathingRateBuffer = []
-    //   }
-    // }, 1000)
-
     return () => {
       heartbeatMonitor.stop()
-      clearInterval(chartUpdateInterval)
     }
   }
 
