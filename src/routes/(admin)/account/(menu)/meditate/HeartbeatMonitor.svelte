@@ -14,9 +14,9 @@
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
   const CHART_DURATION_SECONDS = 30
-  const HR_WINDOW_SIZE = 30 // seconds
-  const BR_WINDOW_SIZE = 60 // seconds
-  const RPPG_INTERVAL = 1000 // milliseconds
+  const HR_WINDOW_SIZE = 20 // seconds
+  const BR_WINDOW_SIZE = 24 // seconds
+  const RPPG_INTERVAL = 2500 // milliseconds
 
   let isVideoLoaded = false
 
@@ -166,6 +166,8 @@
 
   async function initializeApp() {
     await loadOpenCv(OPENCV_URI)
+
+    let lastCallbackTime = 0
 
     startTime = new Date()
     const heartbeatMonitor = new Heartbeat(
