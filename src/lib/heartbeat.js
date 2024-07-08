@@ -139,7 +139,7 @@ export class Heartbeat {
       // Track face
       else {
         // Uncomment if you want to use face tracking
-        // this.trackFace(this.lastFrameGray, this.frameGray);
+        this.trackFace(this.lastFrameGray, this.frameGray);
       }
 
       // Update the signal
