@@ -6,11 +6,14 @@
 
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
+  let movementChart: ChartType
   let startTime: Date
   let webcamId: string = "webcam"
   let canvasId: string = "canvas"
   let heartRateChartCanvas: HTMLCanvasElement
   let breathingRateChartCanvas: HTMLCanvasElement
+  let movementChartCanvas: HTMLCanvasElement
+
   const OPENCV_URI: string = "/opencv.js"
   const HAARCASCADE_URI: string = "/haarcascade_frontalface_alt.xml"
   const CHART_DURATION_SECONDS = 30
@@ -69,6 +72,17 @@
       "rgb(255, 99, 132)", // Color for breathing rate chart
       (chart) => {
         breathingRateChart = chart
+      },
+    )
+    initializeChart(
+      movementChartCanvas,
+      "Movement",
+      "Movement Score",
+      0,
+      100,
+      "rgb(255, 159, 64)", // Color for movement chart
+      (chart) => {
+        movementChart = chart
       },
     )
   }
@@ -195,7 +209,7 @@
 
         updateChart(heartRateChart, bpm, elapsedSeconds)
         updateChart(breathingRateChart, brpm, elapsedSeconds)
-        console.log(movement)
+        updateChart(movementChart, movement, elapsedSeconds)
       },
     )
     heartbeatMonitor.init()
@@ -231,6 +245,9 @@
       </div>
       <div class="chart-container">
         <canvas bind:this={breathingRateChartCanvas}></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas bind:this={movementChartCanvas}></canvas>
       </div>
     </div>
   </div>
@@ -269,7 +286,7 @@
   }
   .chart-container {
     width: 100%;
-    height: 250px;
+    height: 200px;
   }
 
   @media (min-width: 768px) {

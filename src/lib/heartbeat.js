@@ -29,7 +29,7 @@ export class Heartbeat {
     this.maxMovementHistory = 30;
     this.movementThreshold = 0.01; // Adjust this value as needed
     this.lastMovementScore = 0;
-    this.movementAlpha = 0.9; // Exponential moving average factor
+    this.movementAlpha = 0.5; // Exponential moving average factor
 
     this.worker = new Worker('/heartbeat-worker.js');
     this.worker.onmessage = (e) => {

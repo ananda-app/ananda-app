@@ -228,7 +228,7 @@ self.onmessage = function (e) {
   self.postMessage({
     bpm: parseFloat(bpm.toFixed(0)),
     brpm: parseFloat(brpm.toFixed(0)),
-    movement: parseFloat(movement.toFixed(2)),
+    movement: parseFloat(movement.toFixed(0)),
     timestamp: callbackData.timestamp
   });
 };
