@@ -3,7 +3,7 @@
   import { enhance } from "$app/forms"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
-  import HeartbeatMonitor from "./HeartbeatMonitor.svelte"
+  import BiometricsMonitor from "./BiometricsMonitor.svelte"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
@@ -79,7 +79,7 @@
         </div>
       </form>
     {:else}
-      <HeartbeatMonitor />
+      <BiometricsMonitor />
     {/if}
   </div>
 </div>

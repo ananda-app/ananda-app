@@ -10,7 +10,7 @@ const MIN_DISTANCE = 10;
 
 // Simple rPPG implementation in JavaScript
 // - Code could be improved given better documentation available for opencv.js
-export class Heartbeat {
+export class Biometrics {
   constructor(webcamId, canvasId, classifierPath, targetFps, hrWindowSize, brWindowSize, rppgInterval, callback) {
     this.webcamId = webcamId;
     this.canvasId = canvasId;
@@ -31,7 +31,7 @@ export class Heartbeat {
     this.lastMovementScore = 0;
     this.movementAlpha = 0.5; // Exponential moving average factor
 
-    this.worker = new Worker('/heartbeat-worker.js');
+    this.worker = new Worker('/biometrics-worker.js');
     this.worker.onmessage = (e) => {
       if (this.callback) {
         this.callback(e.data);

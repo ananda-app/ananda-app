@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { Heartbeat } from "$lib/heartbeat.js"
+  import { Biometrics } from "$lib/biometrics.js"
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
 
@@ -184,7 +184,7 @@
     let lastCallbackTime = 0
 
     startTime = new Date()
-    const heartbeatMonitor = new Heartbeat(
+    const biometricsMonitor = new Biometrics(
       webcamId,
       canvasId,
       HAARCASCADE_URI,
@@ -212,10 +212,10 @@
         updateChart(movementChart, movement, elapsedSeconds)
       },
     )
-    heartbeatMonitor.init()
+    biometricsMonitor.init()
 
     return () => {
-      heartbeatMonitor.stop()
+      biometricsMonitor.stop()
     }
   }
 
