@@ -3,6 +3,7 @@
   import { Biometrics } from "$lib/biometrics.js"
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
+  import { loadOpenCv } from "$lib/opencvLoader"
 
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
@@ -22,33 +23,11 @@
   const RPPG_INTERVAL = 2500 // milliseconds
 
   let isVideoLoaded = false
+  let biometricsMonitor: Biometrics | null = null
 
   function handleVideoLoaded() {
     isVideoLoaded = true
     initializeCharts()
-  }
-
-  async function loadOpenCv(uri: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const tag: HTMLScriptElement = document.createElement("script")
-      tag.src = uri
-      tag.async = true
-      tag.type = "text/javascript"
-      tag.onload = () => {
-        ;(window as any).cv["onRuntimeInitialized"] = () => {
-          resolve()
-        }
-      }
-      tag.onerror = () => {
-        reject(new URIError("opencv didn't load correctly."))
-      }
-      const firstScriptTag = document.getElementsByTagName("script")[0]
-      if (firstScriptTag?.parentNode) {
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
-      } else {
-        document.head.appendChild(tag)
-      }
-    })
   }
 
   function initializeCharts(): void {
@@ -181,10 +160,12 @@
   async function initializeApp() {
     await loadOpenCv(OPENCV_URI)
 
-    let lastCallbackTime = 0
+    if (biometricsMonitor) {
+      biometricsMonitor.stop()
+    }
 
     startTime = new Date()
-    const biometricsMonitor = new Biometrics(
+    biometricsMonitor = new Biometrics(
       webcamId,
       canvasId,
       HAARCASCADE_URI,
@@ -215,14 +196,28 @@
     biometricsMonitor.init()
 
     return () => {
-      biometricsMonitor.stop()
+      if (biometricsMonitor) {
+        biometricsMonitor.stop()
+        biometricsMonitor = null
+      }
     }
   }
 
   onMount(() => {
-    initializeApp().catch((error) => {
-      console.error("Error initializing app:", error)
-    })
+    let cleanup: (() => void) | undefined
+    initializeApp()
+      .then((cleanupFn) => {
+        cleanup = cleanupFn
+      })
+      .catch((error) => {
+        console.error("Error initializing app:", error)
+      })
+
+    return () => {
+      if (cleanup) {
+        cleanup()
+      }
+    }
   })
 </script>
 

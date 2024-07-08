@@ -8,15 +8,21 @@
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
 
-  let showMonitor = false
+  let isMeditating = false
   let error = ""
+
+  $: showMonitor = isMeditating
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
-      showMonitor = true
+      isMeditating = true
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
     }
+  }
+
+  function stopMeditation() {
+    isMeditating = false
   }
 </script>
 
@@ -27,11 +33,10 @@
 <div class="w-full max-w-md">
   <div class="">
     <h1 class="text-2xl font-bold text-gray-800 mb-4">Meditate</h1>
-    {#if !showMonitor}
+    {#if !isMeditating}
       <p class="text-gray-600 mb-6">
-        Please enter how long you want to meditate and any comments you have
-        about your current mood, technique to follow, or anything else you'd
-        like to note.
+        Please enter the details below to start. Ensure that you are in a well
+        lighted area and your face is cleartly visible.
       </p>
       {#if error}
         <p class="text-red-500 mb-4">{error}</p>
@@ -79,7 +84,14 @@
         </div>
       </form>
     {:else}
-      <BiometricsMonitor />
+      {#if showMonitor}
+        <BiometricsMonitor />
+      {/if}
+      <div class="w-full flex mt-4">
+        <button class="btn btn-error" on:click={stopMeditation}>
+          Stop Meditation
+        </button>
+      </div>
     {/if}
   </div>
 </div>
