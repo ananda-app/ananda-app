@@ -7,7 +7,7 @@ const LOW_BRPM = 5;
 const HIGH_BRPM = 25;
 
 self.onmessage = function (e) {
-  const { signal, timestamps, fps, hrWindowSize, brWindowSize, rescan, callbackData } = e.data;
+  const { signal, timestamps, fps, hrWindowSize, brWindowSize, rescan, movementHistory, callbackData } = e.data;
 
   function denoise(signal, rescan) {
     let diff = new cv.Mat();
@@ -173,6 +173,22 @@ self.onmessage = function (e) {
     return result.maxLoc.y * fps / channel.rows * SEC_PER_MIN;
   }
 
+  function calculateMovementScore(movementHistory, duration) {
+    if (movementHistory.length === 0) return 0;
+  
+    const recentHistory = movementHistory.filter(m => m.timestamp > Date.now() - duration);
+    
+    if (recentHistory.length === 0) return 0;
+  
+    const avgMovement = recentHistory.reduce((sum, m) => sum + m.movement, 0) / recentHistory.length;
+    
+    // The movement is already normalized to 0-100 scale, so we can return it directly
+    return avgMovement;
+  }
+
+  // Calculate movement over the last 5 seconds
+  let movement = calculateMovementScore(movementHistory, 5000);
+
   // Heart rate calculation
   let hrWindowFrames = fps * hrWindowSize;
   let hrSignal = signal.slice(-hrWindowFrames);
@@ -212,6 +228,7 @@ self.onmessage = function (e) {
   self.postMessage({
     bpm: parseFloat(bpm.toFixed(0)),
     brpm: parseFloat(brpm.toFixed(0)),
+    movement: parseFloat(movement.toFixed(2)),
     timestamp: callbackData.timestamp
   });
 };

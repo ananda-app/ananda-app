@@ -23,6 +23,14 @@ export class Heartbeat {
     this.rppgInterval = rppgInterval;
     this.callback = callback;
 
+    this.backSub = new cv.BackgroundSubtractorMOG2(500, 16, false); // Set detectShadows to false
+    this.fgMask = new cv.Mat();
+    this.movementHistory = [];
+    this.maxMovementHistory = 30;
+    this.movementThreshold = 0.01; // Adjust this value as needed
+    this.lastMovementScore = 0;
+    this.movementAlpha = 0.9; // Exponential moving average factor
+
     this.worker = new Worker('/heartbeat-worker.js');
     this.worker.onmessage = (e) => {
       if (this.callback) {
@@ -125,6 +133,26 @@ export class Heartbeat {
       let rescanFlag = false;
       cv.cvtColor(this.frameRGB, this.frameGray, cv.COLOR_RGBA2GRAY);
 
+      // Apply background subtraction
+      this.backSub.apply(this.frameGray, this.fgMask);
+      let movement = cv.countNonZero(this.fgMask) / (this.fgMask.rows * this.fgMask.cols);
+      
+      // Apply threshold and smooth the movement score
+      if (movement > this.movementThreshold) {
+        this.lastMovementScore = this.movementAlpha * movement + (1 - this.movementAlpha) * this.lastMovementScore;
+      } else {
+        this.lastMovementScore = (1 - this.movementAlpha) * this.lastMovementScore;
+      }
+      
+      // Normalize to 0-100 scale
+      let normalizedMovement = Math.min(100, this.lastMovementScore * 1000);
+      
+      // Store movement in history
+      this.movementHistory.push({movement: normalizedMovement, timestamp: time});
+      if (this.movementHistory.length > this.maxMovementHistory) {
+        this.movementHistory.shift();
+      }
+
       // Need to find the face
       if (!this.faceValid) {
         this.lastScanTime = time;
@@ -139,8 +167,11 @@ export class Heartbeat {
       // Track face
       else {
         // Uncomment if you want to use face tracking
-        // this.trackFace(this.lastFrameGray, this.frameGray);
+        this.trackFace(this.lastFrameGray, this.frameGray);
       }
+
+      // Update last frame
+      this.frameGray.copyTo(this.lastFrameGray);
 
       // Update the signal
       if (this.faceValid) {
@@ -315,6 +346,7 @@ export class Heartbeat {
           hrWindowSize: this.hrWindowSize,
           brWindowSize: this.brWindowSize,
           rescan: this.rescan,
+          movementHistory: this.movementHistory,
           callbackData: { timestamp: this.timestamps[this.timestamps.length - 1] }
         });
       }
@@ -351,5 +383,7 @@ export class Heartbeat {
       this.lastFrameGray.delete();
       this.frameGray.delete();
       this.overlayMask.delete();
+
+      if (this.fgMask) this.fgMask.delete();
     }
   }

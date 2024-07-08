@@ -179,10 +179,12 @@
       ({
         bpm,
         brpm,
+        movement,
         timestamp,
       }: {
         bpm: number
         brpm: number
+        movement: number
         timestamp: number
       }) => {
         const elapsedSeconds = Math.floor(
@@ -191,6 +193,7 @@
 
         updateChart(heartRateChart, bpm, elapsedSeconds)
         updateChart(breathingRateChart, brpm, elapsedSeconds)
+        console.log(movement)
       },
     )
     heartbeatMonitor.init()
