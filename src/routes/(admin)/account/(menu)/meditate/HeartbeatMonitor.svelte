@@ -56,8 +56,8 @@
       heartRateChartCanvas,
       "Heart Rate (BPM)",
       "BPM",
-      20,
-      120,
+      40,
+      160,
       "rgb(75, 192, 192)", // Color for heart rate chart
       (chart) => {
         heartRateChart = chart
