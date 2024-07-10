@@ -79,9 +79,9 @@ export const actions: Actions = {
 
       // Retrieve the ID of the newly created session
       if (!data || data.length === 0) {
-        throw new Error("Failed to retrieve session ID");
+        throw new Error("Failed to retrieve meditation ID");
       }
-      const sessionId = data[0].id; 
+      const meditationId = data[0].id; 
 
       const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.8, apiKey: OPENAI_API_KEY });
       const tools = [getHeartRate, getBreathingRate, getMovement];
@@ -99,12 +99,41 @@ export const actions: Actions = {
       //autogpt.run(goals);
 
       // Return the result
-      return { success: true, sessionId: sessionId };
+      return { success: true, meditationId: meditationId };
     } catch (error) {
       console.error(error);
       return fail(500, { error: "An error occurred while processing your request" });
     }
   },
+
+  stop: async ({ request, locals: { supabase, safeGetSession } }) => {
+    const { session } = await safeGetSession();
+    if (!session) {
+      return fail(401, { error: "Unauthorized" });
+    }
+
+    const formData = await request.formData();
+    const meditationId = formData.get('meditationId');
+
+    if (!meditationId) {
+      return fail(400, { error: "Meditation ID is required" });
+    }
+
+    try {
+      const { error } = await supabase
+        .from('meditation_sessions')
+        .update({ end_time: new Date() })
+        .eq('id', meditationId)
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error stopping meditation:', error);
+      return fail(500, { error: "Failed to stop meditation" });
+    }
+  },  
 
   saveBiometrics: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession();
@@ -118,8 +147,9 @@ export const actions: Actions = {
     const brpm = Number(formData.get('brpm'));
     const movement = Number(formData.get('movement'));
     const elapsedSeconds = Number(formData.get('elapsedSeconds'));
-  
-    if (isNaN(ts) || isNaN(bpm) || isNaN(brpm) || isNaN(movement) || isNaN(elapsedSeconds)) {
+    const meditationId = Number(formData.get('meditationId'));
+
+    if (isNaN(ts) || isNaN(bpm) || isNaN(brpm) || isNaN(movement) || isNaN(elapsedSeconds) || isNaN(meditationId)) {
       return fail(400, { error: "Invalid data" });
     }
   
@@ -127,14 +157,24 @@ export const actions: Actions = {
 
     console.log(biometricsData)
   
-    // Process and save the data as needed
-    // For example, you might want to save it to the database:
-    // const { error } = await supabase
-    //   .from('biometrics')
-    //   .insert({ user_id: session.user.id, ts, bpm, brpm, movement, elapsed_seconds: elapsedSeconds });
-    
-    // if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from('biometrics')
+        .insert({ 
+          time: new Date(ts).toISOString(),
+          meditation_id: meditationId,
+          bpm, 
+          brpm, 
+          movement, 
+          elapsed_seconds: elapsedSeconds 
+        });
+      
+      if (error) throw error;
   
-    return { success: true };
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving biometrics:', error);
+      return fail(500, { error: "Failed to save biometrics data" });
+    }
   }  
 };

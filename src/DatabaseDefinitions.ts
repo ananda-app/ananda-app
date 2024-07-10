@@ -174,7 +174,41 @@ export interface Database {
             referencedColumns: ["id"]
           }
         ]
-      },      
+      },
+      biometrics: {
+        Row: {
+          time: string // TIMESTAMPTZ is represented as string in TypeScript
+          meditation_id: number
+          bpm: number | null
+          brpm: number | null
+          movement: number | null
+          elapsed_seconds: number | null
+        }
+        Insert: {
+          time: string
+          meditation_id: number
+          bpm?: number | null
+          brpm?: number | null
+          movement?: number | null
+          elapsed_seconds?: number | null
+        }
+        Update: {
+          time?: string
+          meditation_id?: number
+          bpm?: number | null
+          brpm?: number | null
+          movement?: number | null
+          elapsed_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biometrics_meditation_id_fkey"
+            columns: ["meditation_id"]
+            referencedRelation: "meditation_sessions"
+            referencedColumns: ["id"]
+          }
+        ]
+      },           
     }
     Views: {
       [_ in never]: never

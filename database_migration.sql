@@ -164,3 +164,16 @@ CREATE POLICY delete_meditation_sessions_on_user_id
     ON meditation_sessions
     FOR DELETE
     USING (user_id = auth.uid());
+
+CREATE TABLE biometrics (
+    time TIMESTAMPTZ NOT NULL,
+    meditation_id INTEGER NOT NULL,
+    bpm FLOAT,
+    brpm FLOAT,
+    movement FLOAT,
+    elapsed_seconds INTEGER
+);
+
+SELECT create_hypertable('biometrics', 'time');
+
+CREATE INDEX ON biometrics (meditation_id, time DESC);

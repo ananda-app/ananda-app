@@ -6,6 +6,7 @@
   import { loadOpenCv } from "$lib/opencvLoader"
 
   export let currentRoute: string
+  export let meditationId: string | null
 
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
@@ -33,11 +34,12 @@
     brpm: number
     movement: number
     elapsedSeconds: number
+    meditationId: string | null
   }) {
     try {
       const formData = new FormData()
       Object.entries(data).forEach(([key, value]) => {
-        formData.append(key, value.toString())
+        formData.append(key, value !== null ? value.toString() : "")
       })
 
       const response = await fetch(`${currentRoute}?/saveBiometrics`, {
@@ -224,7 +226,14 @@
         updateChart(breathingRateChart, brpm, elapsedSeconds)
         updateChart(movementChart, movement, elapsedSeconds)
 
-        saveBiometrics({ ts: Date.now(), bpm, brpm, movement, elapsedSeconds })
+        saveBiometrics({
+          ts: Date.now(),
+          bpm,
+          brpm,
+          movement,
+          elapsedSeconds,
+          meditationId,
+        })
       },
     )
     biometricsMonitor.init()

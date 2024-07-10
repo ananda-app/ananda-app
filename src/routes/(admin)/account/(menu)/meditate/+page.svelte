@@ -11,19 +11,41 @@
 
   let isMeditating = false
   let error = ""
+  let meditationId: string | null = null
 
   $: showMonitor = isMeditating
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
       isMeditating = true
+      meditationId = result.data?.meditationId ?? null
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
     }
   }
 
-  function stopMeditation() {
-    isMeditating = false
+  async function stopMeditation() {
+    if (meditationId) {
+      try {
+        const formData = new FormData()
+        formData.append("meditationId", meditationId)
+
+        const response = await fetch("?/stop", {
+          method: "POST",
+          body: formData,
+        })
+        const result = await response.json()
+        if (result.type === "success") {
+          isMeditating = false
+          meditationId = null
+        } else {
+          error = result.error || "Failed to stop meditation"
+        }
+      } catch (err) {
+        console.error("Error stopping meditation:", err)
+        error = "An error occurred while stopping the meditation"
+      }
+    }
   }
 </script>
 
@@ -105,7 +127,7 @@
       </form>
     {:else}
       {#if showMonitor}
-        <BiometricsMonitor currentRoute={$page.url.pathname} />
+        <BiometricsMonitor currentRoute={$page.url.pathname} {meditationId} />
       {/if}
       <div class="w-full flex mt-4">
         <button class="btn btn-error" on:click={stopMeditation}>
