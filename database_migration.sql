@@ -131,3 +131,36 @@ begin
   return coalesce(is_admin, false);
 end;
 $$ language plpgsql security definer;
+
+CREATE TABLE meditation_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    duration INTEGER NOT NULL,
+    technique TEXT,
+    comments TEXT,
+    start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP WITH TIME ZONE,
+    FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+
+ALTER TABLE meditation_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY select_meditation_sessions_on_user_id
+    ON meditation_sessions
+    FOR SELECT
+    USING (user_id = auth.uid());
+
+CREATE POLICY insert_meditation_sessions_on_user_id
+    ON meditation_sessions
+    FOR INSERT
+    WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY update_meditation_sessions_on_user_id
+    ON meditation_sessions
+    FOR UPDATE
+    USING (user_id = auth.uid());
+
+CREATE POLICY delete_meditation_sessions_on_user_id
+    ON meditation_sessions
+    FOR DELETE
+    USING (user_id = auth.uid());

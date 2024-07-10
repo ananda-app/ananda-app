@@ -137,7 +137,44 @@ export interface Database {
             referencedColumns: ["id"]
           }
         ]
-      }
+      },
+      meditation_sessions: {
+        Row: {
+          id: string,
+          user_id: string,
+          duration: number,
+          technique: string | null,
+          comments: string | null,
+          start_time: Date,
+          end_time: Date | null
+        },
+        Insert: {
+          id?: string,
+          user_id: string,
+          duration: number,
+          technique?: string | null,
+          comments?: string | null,
+          start_time?: Date,
+          end_time?: Date | null
+        },
+        Update: {
+          id?: string,
+          user_id?: string,
+          duration?: number,
+          technique?: string | null,
+          comments?: string | null,
+          start_time?: Date,
+          end_time?: Date | null
+        },
+        Relationships: [
+          {
+            foreignKeyName: "meditation_sessions_user_id_fkey",
+            columns: ["user_id"],
+            referencedRelation: "auth.users",
+            referencedColumns: ["id"]
+          }
+        ]
+      },      
     }
     Views: {
       [_ in never]: never

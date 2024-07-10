@@ -5,6 +5,8 @@
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
   import { loadOpenCv } from "$lib/opencvLoader"
 
+  export let currentRoute: string
+
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
   let movementChart: ChartType
@@ -24,6 +26,36 @@
 
   let isVideoLoaded = false
   let biometricsMonitor: Biometrics | null = null
+
+  async function saveBiometrics(data: {
+    ts: number
+    bpm: number
+    brpm: number
+    movement: number
+    elapsedSeconds: number
+  }) {
+    try {
+      const formData = new FormData()
+      Object.entries(data).forEach(([key, value]) => {
+        formData.append(key, value.toString())
+      })
+
+      const response = await fetch(`${currentRoute}?/saveBiometrics`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to send data to server")
+      }
+
+      const result = await response.json()
+      return result
+    } catch (error) {
+      console.error("Error sending data to server:", error)
+      throw error
+    }
+  }
 
   function handleVideoLoaded() {
     isVideoLoaded = true
@@ -191,6 +223,8 @@
         updateChart(heartRateChart, bpm, elapsedSeconds)
         updateChart(breathingRateChart, brpm, elapsedSeconds)
         updateChart(movementChart, movement, elapsedSeconds)
+
+        saveBiometrics({ ts: Date.now(), bpm, brpm, movement, elapsedSeconds })
       },
     )
     biometricsMonitor.init()

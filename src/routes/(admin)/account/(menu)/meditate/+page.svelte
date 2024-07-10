@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getContext } from "svelte"
   import { enhance } from "$app/forms"
+  import { page } from "$app/stores"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
@@ -43,6 +44,7 @@
       {/if}
       <form
         method="POST"
+        action="?/start"
         use:enhance={() => {
           return ({ result }) => {
             handleResult(result)
@@ -51,41 +53,59 @@
         class="form-control"
       >
         <div class="mb-4">
-          <label for="duration" class="label">
-            <span class="label-text">Duration (minutes)</span>
-          </label>
-          <input
-            id="duration"
-            name="duration"
-            type="number"
-            value="10"
-            placeholder="Enter duration in minutes"
-            class="input input-bordered w-full"
-            required
-          />
-        </div>
+          <div class="mb-4">
+            <label for="duration" class="label">
+              <span class="label-text">Duration (minutes)</span>
+            </label>
+            <input
+              id="duration"
+              name="duration"
+              type="number"
+              value="10"
+              placeholder="Enter duration in minutes"
+              class="input input-bordered w-full"
+              required
+            />
+          </div>
 
-        <div class="mb-4">
-          <label for="comments" class="label">
-            <span class="label-text">Comments</span>
-          </label>
-          <textarea
-            id="comments"
-            name="comments"
-            placeholder="Any comments (e.g., your current mood, technique, goals, etc.)"
-            class="textarea textarea-bordered w-full"
-          ></textarea>
-        </div>
+          <div class="mb-4">
+            <label for="technique" class="label">
+              <span class="label-text">Technique</span>
+            </label>
+            <select
+              id="technique"
+              name="technique"
+              class="select select-bordered w-full"
+              required
+            >
+              <option value="loving_kindness">Loving Kindness</option>
+              <option value="breath_focus">Breath Focus</option>
+              <option value="body_scan">Body Scan</option>
+            </select>
+          </div>
 
-        <div>
-          <button type="submit" class="btn btn-primary w-full">
-            Start Meditation
-          </button>
+          <div class="mb-4">
+            <label for="comments" class="label">
+              <span class="label-text">Comments</span>
+            </label>
+            <textarea
+              id="comments"
+              name="comments"
+              placeholder="E.g., your current mood, goals, substances..."
+              class="textarea textarea-bordered w-full"
+            ></textarea>
+          </div>
+
+          <div>
+            <button type="submit" class="btn btn-primary w-full">
+              Start Meditation
+            </button>
+          </div>
         </div>
       </form>
     {:else}
       {#if showMonitor}
-        <BiometricsMonitor />
+        <BiometricsMonitor currentRoute={$page.url.pathname} />
       {/if}
       <div class="w-full flex mt-4">
         <button class="btn btn-error" on:click={stopMeditation}>
