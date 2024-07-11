@@ -28,20 +28,20 @@ export class AutoGPT {
   private comments: string;
   private memory: VectorStoreRetrieverInterface;
   private fullMessageHistory: BaseMessage[] = [];
-  private nextActionCount = 0;
   private chain: RunnableSequence;
   private tools: ObjectTool[];
   private maxIterations: number;
   private textSplitter: TokenTextSplitter;
   private sendTokenLimit: number;
   private encoding: any = null;
+  private abortFlag: boolean = false;
 
   constructor(
     meditationId: number,
     comments: string,
     llm: BaseChatModel,
     tools: ObjectTool[],
-    { memory, maxIterations = 100, sendTokenLimit = 4096 }: AutoGPTInput & { sendTokenLimit?: number }
+    { memory, maxIterations = 1000, sendTokenLimit = 4096 }: AutoGPTInput & { sendTokenLimit?: number }
   ) {
     this.meditationId = meditationId;
     this.comments = comments;
@@ -258,6 +258,11 @@ export class AutoGPT {
       const documents = await this.textSplitter.createDocuments([memoryToAdd]);
       await this.memory.addDocuments(documents);
       this.fullMessageHistory.push(new SystemMessage(result));
+
+      if (this.abortFlag) {
+        console.log("AutoGPT execution aborted");
+        return "Meditation session aborted";
+      }      
     }
 
     return undefined;
@@ -291,5 +296,9 @@ export class AutoGPT {
         };
       }
     }
+  }
+
+  public abort(): void {
+    this.abortFlag = true;
   }
 }
