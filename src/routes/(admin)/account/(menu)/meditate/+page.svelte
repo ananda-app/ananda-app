@@ -5,6 +5,7 @@
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
+  import { onMount, onDestroy } from "svelte"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
@@ -12,8 +13,37 @@
   let isMeditating = false
   let error = ""
   let meditationId: string | null = null
+  let socket: WebSocket
+  let audio: HTMLAudioElement
 
   $: showMonitor = isMeditating
+
+  onMount(() => {
+    socket = new WebSocket("ws://localhost:3001")
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type === "instruction" && data.meditationId === meditationId) {
+        playInstruction(data.audio)
+      }
+    }
+  })
+
+  onDestroy(() => {
+    if (socket) {
+      socket.close()
+    }
+  })
+
+  function playInstruction(base64Audio: string) {
+    const blob = new Blob(
+      [Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0))],
+      { type: "audio/mpeg" },
+    )
+    const url = URL.createObjectURL(blob)
+    audio.src = url
+    audio.play()
+  }
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
@@ -137,3 +167,5 @@
     {/if}
   </div>
 </div>
+
+<audio bind:this={audio}></audio>

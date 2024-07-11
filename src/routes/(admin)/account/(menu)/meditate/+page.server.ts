@@ -6,19 +6,67 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { OPENAI_API_KEY } from '$env/static/private';
 import { writable } from 'svelte/store';
+import { WebSocketServer, WebSocket } from 'ws';
+import type { Server } from 'http';
+
+let wss: WebSocketServer;
+let connections: WebSocket[] = [];
 
 const activeMeditations = writable<Record<number, AutoGPT>>({});
 
-export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
-  const { session } = await safeGetSession();
-  
-  if (!session) {
-    throw redirect(303, "/login/sign_in");
+function initializeWebSocketServer(server: Server) {
+  wss = new WebSocketServer({ server });
+
+  wss.on('connection', (ws) => {
+    connections.push(ws);
+    ws.on('close', () => {
+      connections = connections.filter(conn => conn !== ws);
+    });
+  });
+}
+
+async function textToSpeech(text: string) {
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "tts-1",
+      input: text,
+      voice: "alloy"
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to convert text to speech');
   }
 
-  return {
-    // return any data needed for the page
-  };
+  return await response.arrayBuffer();
+}
+
+export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
+  try {
+    const { session } = await safeGetSession();
+    
+    if (!session) {
+      throw redirect(303, "/login/sign_in");
+    }
+
+    if (!wss) {
+      const httpServer = (await import('node:http')).createServer();
+      initializeWebSocketServer(httpServer);
+      httpServer.listen(3001);
+    }
+
+    return {
+      // ... existing return data ...
+    };
+  } catch (error) {
+    console.error("Error in load function:", error);
+    throw error;
+  }
 };
 
 export const actions: Actions = {
@@ -102,11 +150,23 @@ export const actions: Actions = {
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
         func: async (instruction) => {
           console.log(`${instruction}`);
+          const audioBuffer = await textToSpeech(instruction);
+          const base64Audio = Buffer.from(audioBuffer).toString('base64');
+          connections.forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ 
+                type: 'instruction', 
+                meditationId, 
+                instruction, 
+                audio: base64Audio 
+              }));
+            }
+          });          
           return "";
         },
       });
 
-      const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.8, apiKey: OPENAI_API_KEY });
+      const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.5, apiKey: OPENAI_API_KEY });
       const tools = [getBiometrics, getTimeLeft, provideNextInstruction];
 
       const vectorStore = new MemoryVectorStore(
