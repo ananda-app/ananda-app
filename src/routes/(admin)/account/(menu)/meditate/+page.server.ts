@@ -150,6 +150,17 @@ export const actions: Actions = {
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
         func: async (instruction) => {
           console.log(`${instruction}`);
+
+          const { data, error } = await supabase
+            .from('meditation_instructions')
+            .insert({
+              ts: new Date().toISOString(),
+              meditation_id: meditationId,
+              instruction: instruction
+            });
+
+          if (error) throw error;
+                    
           const audioBuffer = await textToSpeech(instruction);
           const base64Audio = Buffer.from(audioBuffer).toString('base64');
           connections.forEach(ws => {

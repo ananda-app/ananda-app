@@ -177,3 +177,13 @@ CREATE TABLE biometrics (
 SELECT create_hypertable('biometrics', 'ts');
 
 CREATE INDEX ON biometrics (meditation_id, ts DESC);
+
+CREATE TABLE meditation_instructions (
+    ts TIMESTAMPTZ NOT NULL,
+    meditation_id BIGINT NOT NULL,
+    instruction TEXT NOT NULL
+);
+
+SELECT create_hypertable('meditation_instructions', 'ts');
+
+CREATE INDEX ON meditation_instructions (meditation_id, ts DESC);

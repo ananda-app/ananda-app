@@ -208,7 +208,32 @@ export interface Database {
             referencedColumns: ["id"]
           }
         ]
-      },           
+      },
+      meditation_instructions: {
+        Row: {
+          ts: string
+          meditation_id: number
+          instruction: string
+        }
+        Insert: {
+          ts: string
+          meditation_id: number
+          instruction: string
+        }
+        Update: {
+          ts?: string
+          meditation_id?: number
+          instruction?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meditation_instructions_meditation_id_fkey"
+            columns: ["meditation_id"]
+            referencedRelation: "meditation_sessions"
+            referencedColumns: ["id"]
+          }
+        ]
+      },          
     }
     Views: {
       [_ in never]: never
