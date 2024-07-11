@@ -24,6 +24,8 @@ export interface AutoGPTInput {
 }
 
 export class AutoGPT {
+  private meditationId: number;
+  private comments: string;
   private memory: VectorStoreRetrieverInterface;
   private fullMessageHistory: BaseMessage[] = [];
   private nextActionCount = 0;
@@ -35,23 +37,27 @@ export class AutoGPT {
   private encoding: any = null;
 
   constructor(
+    meditationId: number,
+    comments: string,
     llm: BaseChatModel,
     tools: ObjectTool[],
     { memory, maxIterations = 100, sendTokenLimit = 4096 }: AutoGPTInput & { sendTokenLimit?: number }
   ) {
-    this.memory = memory;
+    this.meditationId = meditationId;
+    this.comments = comments;
     this.tools = tools;
+    this.memory = memory;
     this.maxIterations = maxIterations;
     this.sendTokenLimit = sendTokenLimit;
-
+  
     this.initializeEncoding();
-
+  
     const prompt = ChatPromptTemplate.fromMessages([
       new MessagesPlaceholder("messages"),
     ]);
-
+  
     this.chain = RunnableSequence.from([prompt, llm]);
-
+  
     const chunkSize = getEmbeddingContextSize(
       "modelName" in memory.vectorStore.embeddings
         ? (memory.vectorStore.embeddings.modelName as string)
@@ -76,11 +82,37 @@ export class AutoGPT {
   
   private constructPrompt(): string {
     const basePrompt = `
-  You are a meditation coach specializing in guided meditation sessions, utilizing biometric feedback to tailor the sessions dynamically.
+  You are a meditation coach who conducts guided meditation sessions based on the biometric stats of the user.
+  Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is provided below.
+  Think step by step. At each step, decide whether to provide an instruction to the user based on the stage and biometric stats or keep monitoring.
+  Start by checking the time left in the session. Keep track of it and make sure to plan each stage accordingly.
   Your decisions must always be made independently without seeking user assistance.
   Play to your strengths as an LLM and pursue simple strategies with no legal complications.
   
   Goals: {goals}
+
+  User Comments: 
+  ${this.comments}
+
+  Grouding Stage:
+  - Provide instructions to adopt a comfortable posture.
+  - Ask the user to set an intention to sit as still as possible.
+  - Ask the user to take a few deep breathing, feel the body sensations and relax. 
+  - Move to the next stage when breathing stablizes.
+
+  Immersion Stage:
+  - Provide instructions to focus on the object of meditation and return if distracted. 
+  - Monitor the heart rate, breathing rate and movements continously.
+  - Give ample time in between instructions to allow the user to keep the focus.
+  - Interrupt only if there's any major change in the biometric stats.
+  - Move to the next stage when a time left nears 1 minute or so.
+
+  Clousure Stage:
+  - Ask the user to stop focusing on the object of meditation.
+  - Provide intructions on reflect on the session and current mental state.
+  - Ask user to rub the hands together, place the palms on the eyes and slide downward towards the neck.
+  - Suggest to do a namaste gesture to express gratitude.
+  - Provide instruction to try and keep practicing it for the rest of the day. 
   
   Constraints:
   1. If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.
@@ -102,11 +134,13 @@ export class AutoGPT {
   Response Format:
   {
     "thoughts": {
+      "meditation_id": ${this.meditationId},
+      "seconds_left": "time left for the session",
+      "stage": "meditation stage",
       "text": "thought",
       "reasoning": "reasoning",
       "plan": ["short list", "that conveys", "long-term plan"],
       "criticism": "constructive self-criticism",
-      "speak": "thoughts summary to say to user"
     },
     "command": {
       "name": "command name",

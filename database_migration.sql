@@ -138,8 +138,8 @@ CREATE TABLE meditation_sessions (
     duration INTEGER NOT NULL,
     technique TEXT,
     comments TEXT,
-    start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    end_time TIMESTAMP WITH TIME ZONE,
+    start_ts TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    end_ts TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 
@@ -166,7 +166,7 @@ CREATE POLICY delete_meditation_sessions_on_user_id
     USING (user_id = auth.uid());
 
 CREATE TABLE biometrics (
-    time TIMESTAMPTZ NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
     meditation_id INTEGER NOT NULL,
     bpm FLOAT,
     brpm FLOAT,
@@ -174,6 +174,6 @@ CREATE TABLE biometrics (
     elapsed_seconds INTEGER
 );
 
-SELECT create_hypertable('biometrics', 'time');
+SELECT create_hypertable('biometrics', 'ts');
 
-CREATE INDEX ON biometrics (meditation_id, time DESC);
+CREATE INDEX ON biometrics (meditation_id, ts DESC);

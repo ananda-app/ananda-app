@@ -145,8 +145,8 @@ export interface Database {
           duration: number,
           technique: string | null,
           comments: string | null,
-          start_time: Date,
-          end_time: Date | null
+          start_ts: Date,
+          end_ts: Date | null
         },
         Insert: {
           id?: string,
@@ -154,8 +154,8 @@ export interface Database {
           duration: number,
           technique?: string | null,
           comments?: string | null,
-          start_time?: Date,
-          end_time?: Date | null
+          start_ts?: Date,
+          end_ts?: Date | null
         },
         Update: {
           id?: string,
@@ -163,8 +163,8 @@ export interface Database {
           duration?: number,
           technique?: string | null,
           comments?: string | null,
-          start_time?: Date,
-          end_time?: Date | null
+          start_ts?: Date,
+          end_ts?: Date | null
         },
         Relationships: [
           {
@@ -177,7 +177,7 @@ export interface Database {
       },
       biometrics: {
         Row: {
-          time: string // TIMESTAMPTZ is represented as string in TypeScript
+          ts: string // TIMESTAMPTZ is represented as string in TypeScript
           meditation_id: number
           bpm: number | null
           brpm: number | null
@@ -185,7 +185,7 @@ export interface Database {
           elapsed_seconds: number | null
         }
         Insert: {
-          time: string
+          ts: string
           meditation_id: number
           bpm?: number | null
           brpm?: number | null
@@ -193,7 +193,7 @@ export interface Database {
           elapsed_seconds?: number | null
         }
         Update: {
-          time?: string
+          ts?: string
           meditation_id?: number
           bpm?: number | null
           brpm?: number | null

@@ -12,25 +12,6 @@ let biometricsData = {
   movement: 0
 };
 
-// Biometric tools
-const getHeartRate = new DynamicTool({
-  name: "get_heart_rate",
-  description: "Get the current heart rate of the user. Input should be an empty string.",
-  func: async () => biometricsData.bpm.toString(),
-});
-
-const getBreathingRate = new DynamicTool({
-  name: "get_breathing_rate",
-  description: "Get the current breathing rate of the user. Input should be an empty string.",
-  func: async () => biometricsData.brpm.toString(),
-});
-
-const getMovement = new DynamicTool({
-  name: "get_movement",
-  description: "Get the current movement level of the user. Input should be an empty string.",
-  func: async () => biometricsData.movement.toString(),
-});
-
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
   const { session } = await safeGetSession();
   
@@ -51,9 +32,9 @@ export const actions: Actions = {
     }
 
     const formData = await request.formData();
-    const duration = formData.get("duration");
-    const technique = formData.get('technique');
-    const comments = formData.get("comments");
+    const duration = Number(formData.get("duration"));
+    const technique = String(formData.get('technique'));
+    const comments = String(formData.get("comments"));
 
     // Validate the form data
     if (!duration || isNaN(Number(duration))) {
@@ -62,6 +43,8 @@ export const actions: Actions = {
 
     try {
       // Insert the session data into the 'meditation_sessions' table
+      const startTime = new Date();
+
       const { data, error } = await supabase
         .from('meditation_sessions')
         .insert([
@@ -70,7 +53,8 @@ export const actions: Actions = {
             duration: Number(duration), 
             technique: technique as string | null, 
             comments: comments as string | null,
-            end_time: null 
+            start_ts: startTime,
+            end_ts: null 
           }
         ])
         .select('id');
@@ -81,22 +65,97 @@ export const actions: Actions = {
       if (!data || data.length === 0) {
         throw new Error("Failed to retrieve meditation ID");
       }
-      const meditationId = data[0].id; 
+      const meditationId = Number(data[0].id); 
+
+      const getHeartRate = new DynamicTool({
+        name: "get_heart_rate",
+        description: "Get the last 5 heart beats per minute stat for the meditation session in CSV format",
+        func: async () => {
+          const { data, error } = await supabase
+            .from('biometrics')
+            .select('ts, bpm, elapsed_seconds')
+            .eq('meditation_id', meditationId)
+            .order('ts', { ascending: false })
+            .limit(5);
+          
+          if (error) throw error;
+          const csvData = ['ts,bpm,elapsed_seconds', ...data.map(row => `${row.ts},${row.bpm},${row.elapsed_seconds}`)].join('\n');
+          console.log(csvData);
+          return csvData;
+        },
+      });
+      
+      const getBreathingRate = new DynamicTool({
+        name: "get_breathing_rate",
+        description: "Get the last 5 breaths per minute stat for the meditation session in CSV format",
+        func: async () => {
+          const { data, error } = await supabase
+            .from('biometrics')
+            .select('ts, brpm, elapsed_seconds')
+            .eq('meditation_id', meditationId)
+            .order('ts', { ascending: false })
+            .limit(5);
+          
+          if (error) throw error;
+          const csvData = ['ts,brpm,elapsed_seconds', ...data.map(row => `${row.ts},${row.brpm},${row.elapsed_seconds}`)].join('\n');
+          console.log(csvData);
+          return csvData;
+        },
+      });
+      
+      const getMovement = new DynamicTool({
+        name: "get_movement",
+        description: "Get the last 5 movement score stat for the meditation session in CSV format (0 is completely still)",
+        func: async () => {
+          const { data, error } = await supabase
+            .from('biometrics')
+            .select('ts, movement, elapsed_seconds')
+            .eq('meditation_id', meditationId)
+            .order('ts', { ascending: false })
+            .limit(5);
+          
+          if (error) throw error;
+          const csvData = ['ts,movement,elapsed_seconds', ...data.map(row => `${row.ts},${row.movement},${row.elapsed_seconds}`)].join('\n');
+          console.log(csvData);
+          return csvData;
+        },
+      });      
+
+      const getTimeLeft = new DynamicTool({
+        name: "get_time_left",
+        description: "Get the remaining time in the meditation session in seconds",
+        func: async () => {
+          const now = new Date();
+          const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
+          const remainingSeconds = Math.max(0, duration * 60 - elapsedSeconds);
+          console.log(`remaining seconds: ${remainingSeconds.toFixed(0)}`);
+          return remainingSeconds.toFixed(0);
+        },
+      });
+
+      const provideNextInstruction = new DynamicTool({
+        name: "provide_next_instruction",
+        description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
+        func: async (instruction) => {
+          console.log(`${instruction}`);
+          return "";
+        },
+      });
 
       const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.8, apiKey: OPENAI_API_KEY });
-      const tools = [getHeartRate, getBreathingRate, getMovement];
+      const tools = [getHeartRate, getBreathingRate, getMovement, getTimeLeft, provideNextInstruction];
 
       const vectorStore = new MemoryVectorStore(
         new OpenAIEmbeddings({ apiKey: OPENAI_API_KEY })
       );
 
-      const autogpt = new AutoGPT(llm, tools, {
+      const autogpt = new AutoGPT(meditationId, comments ?? '', llm, tools, {
         memory: vectorStore.asRetriever(),
       });
 
       // Run AutoGPT
-      const goals = [`Conduct a meditation session of ${duration} minutes.`];
-      //autogpt.run(goals);
+      const goals = [`Conduct a ${technique} meditation session of ${duration} minutes.`];
+      autogpt.run(goals);
 
       // Return the result
       return { success: true, meditationId: meditationId };
@@ -122,7 +181,7 @@ export const actions: Actions = {
     try {
       const { error } = await supabase
         .from('meditation_sessions')
-        .update({ end_time: new Date() })
+        .update({ end_ts: new Date() })
         .eq('id', meditationId)
         .eq('user_id', session.user.id);
 
@@ -155,13 +214,13 @@ export const actions: Actions = {
   
     biometricsData = { bpm, brpm, movement };
 
-    console.log(biometricsData)
+    console.log(`Meditation ID: ${meditationId}, BPM: ${bpm}, BRPM: ${brpm}, Movement: ${movement}, Elapsed Seconds: ${elapsedSeconds}`);
   
     try {
       const { error } = await supabase
         .from('biometrics')
         .insert({ 
-          time: new Date(ts).toISOString(),
+          ts: new Date(ts).toISOString(),
           meditation_id: meditationId,
           bpm, 
           brpm, 
