@@ -6,24 +6,9 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { OPENAI_API_KEY } from '$env/static/private';
 import { writable } from 'svelte/store';
-import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'http';
-
-let wss: WebSocketServer;
-let connections: WebSocket[] = [];
+import { meditationEventEmitter } from '$lib/meditationEventEmitter';
 
 const activeMeditations = writable<Record<number, AutoGPT>>({});
-
-function initializeWebSocketServer(server: Server) {
-  wss = new WebSocketServer({ server });
-
-  wss.on('connection', (ws) => {
-    connections.push(ws);
-    ws.on('close', () => {
-      connections = connections.filter(conn => conn !== ws);
-    });
-  });
-}
 
 async function textToSpeech(text: string) {
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -52,12 +37,6 @@ export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession 
     
     if (!session) {
       throw redirect(303, "/login/sign_in");
-    }
-
-    if (!wss) {
-      const httpServer = (await import('node:http')).createServer();
-      initializeWebSocketServer(httpServer);
-      httpServer.listen(3001);
     }
 
     return {
@@ -163,16 +142,16 @@ export const actions: Actions = {
                     
           const audioBuffer = await textToSpeech(instruction);
           const base64Audio = Buffer.from(audioBuffer).toString('base64');
-          connections.forEach(ws => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ 
-                type: 'instruction', 
-                meditationId, 
-                instruction, 
-                audio: base64Audio 
-              }));
-            }
+
+          console.log(`Emitting meditation event for meditation ${meditationId}`);
+
+          meditationEventEmitter.emit('meditation', { 
+            type: 'instruction', 
+            meditationId, 
+            instruction, 
+            audio: base64Audio 
           });          
+
           return "";
         },
       });

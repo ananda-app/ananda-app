@@ -6,43 +6,66 @@
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
   import { onMount, onDestroy } from "svelte"
+  import { browser } from "$app/environment"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
 
+  $: showMonitor = isMeditating
+
   let isMeditating = false
   let error = ""
   let meditationId: string | null = null
-  let socket: WebSocket
+  let eventSource: EventSource
   let audio: HTMLAudioElement
 
-  $: showMonitor = isMeditating
-
   onMount(() => {
-    socket = new WebSocket("ws://localhost:3001")
+    console.log("Component mounted")
+    audio = new Audio()
+    console.log("Initializing SSE connection")
+    eventSource = new EventSource("/account/meditate/sse")
 
-    socket.onmessage = (event) => {
+    eventSource.onopen = () => {
+      console.log("SSE connection opened")
+    }
+
+    eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === "instruction" && data.meditationId === meditationId) {
+        console.log("Playing instruction:", data.instruction)
         playInstruction(data.audio)
+      } else {
+        console.log("Ignoring message:", data)
       }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error("SSE error:", error)
+      eventSource.close()
     }
   })
 
   onDestroy(() => {
-    if (socket) {
-      socket.close()
+    console.log("Component being destroyed")
+    if (eventSource) {
+      console.log("Closing SSE connection")
+      eventSource.close()
     }
   })
 
   function playInstruction(base64Audio: string) {
-    const blob = new Blob(
-      [Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0))],
-      { type: "audio/mpeg" },
-    )
-    const url = URL.createObjectURL(blob)
-    audio.src = url
-    audio.play()
+    if (audio) {
+      console.log("Playing audio instruction")
+      const blob = new Blob(
+        [Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0))],
+        { type: "audio/mpeg" },
+      )
+      const url = URL.createObjectURL(blob)
+      audio.src = url
+      audio.play().catch((e) => console.error("Error playing audio:", e))
+    } else {
+      console.error("Audio element is not initialized")
+    }
   }
 
   function handleResult(result: ActionResult) {
@@ -167,5 +190,3 @@
     {/if}
   </div>
 </div>
-
-<audio bind:this={audio}></audio>
