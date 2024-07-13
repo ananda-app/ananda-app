@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { getContext } from "svelte"
+  import { getContext, onDestroy } from "svelte"
   import { enhance } from "$app/forms"
   import { page } from "$app/stores"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
-  import { onMount, onDestroy } from "svelte"
+
+  export let data
+  const { supabase } = data
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
@@ -13,44 +15,64 @@
   let isMeditating = false
   let error = ""
   let meditationId: string | null = null
-  let socket: WebSocket
-  let audio: HTMLAudioElement
+  let channel: any
 
   $: showMonitor = isMeditating
-
-  onMount(() => {
-    socket = new WebSocket("ws://localhost:3001")
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === "instruction" && data.meditationId === meditationId) {
-        playInstruction(data.audio)
-      }
-    }
-  })
-
-  onDestroy(() => {
-    if (socket) {
-      socket.close()
-    }
-  })
-
-  function playInstruction(base64Audio: string) {
-    const blob = new Blob(
-      [Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0))],
-      { type: "audio/mpeg" },
-    )
-    const url = URL.createObjectURL(blob)
-    audio.src = url
-    audio.play()
-  }
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
       isMeditating = true
       meditationId = result.data?.meditationId ?? null
+      startSubscription()
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
+    }
+  }
+
+  function startSubscription() {
+    if (meditationId) {
+      console.log(`Starting subscription for meditation ID: ${meditationId}`)
+      channel = supabase
+        .channel("meditation_instructions")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "meditation_instructions",
+          },
+          (payload) => {
+            console.log("Received payload:", payload)
+            if (payload.new.meditation_id === meditationId) {
+              console.log(
+                "Matching instruction received:",
+                payload.new.instruction,
+              )
+            } else {
+              console.log(
+                "Non-matching instruction received. Expected ID:",
+                meditationId,
+                "Received ID:",
+                payload.new.meditation_id,
+              )
+            }
+          },
+        )
+        .subscribe((status) => {
+          console.log("Subscription status:", status)
+        })
+    } else {
+      console.log("Cannot start subscription: meditationId is null")
+    }
+  }
+
+  function stopSubscription() {
+    if (channel) {
+      console.log("Stopping subscription")
+      channel.unsubscribe()
+      channel = null
+    } else {
+      console.log("No active channel to unsubscribe")
     }
   }
 
@@ -68,6 +90,7 @@
         if (result.type === "success") {
           isMeditating = false
           meditationId = null
+          stopSubscription()
         } else {
           error = result.error || "Failed to stop meditation"
         }
@@ -77,6 +100,10 @@
       }
     }
   }
+
+  onDestroy(() => {
+    stopSubscription()
+  })
 </script>
 
 <svelte:head>
@@ -167,5 +194,3 @@
     {/if}
   </div>
 </div>
-
-<audio bind:this={audio}></audio>

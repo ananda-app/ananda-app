@@ -228,7 +228,7 @@ export class AutoGPT {
       });
 
       const assistantReply = response.content;
-      console.log(assistantReply);
+      //console.log(assistantReply);
       this.fullMessageHistory.push(new HumanMessage(userInput));
       this.fullMessageHistory.push(new AIMessage(assistantReply));
 

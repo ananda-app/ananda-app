@@ -4,26 +4,10 @@ import { AutoGPT } from "$lib/autogpt";
 import { DynamicTool } from "@langchain/core/tools";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
-import { OPENAI_API_KEY } from '$env/static/private';
+import { OPENAI_API_KEY, VITE_PUBLIC_SUPABASE_URL,  VITE_PUBLIC_SUPABASE_ANON_KEY } from '$env/static/private';
 import { writable } from 'svelte/store';
-import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'http';
-
-let wss: WebSocketServer;
-let connections: WebSocket[] = [];
 
 const activeMeditations = writable<Record<number, AutoGPT>>({});
-
-function initializeWebSocketServer(server: Server) {
-  wss = new WebSocketServer({ server });
-
-  wss.on('connection', (ws) => {
-    connections.push(ws);
-    ws.on('close', () => {
-      connections = connections.filter(conn => conn !== ws);
-    });
-  });
-}
 
 async function textToSpeech(text: string) {
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -46,18 +30,13 @@ async function textToSpeech(text: string) {
   return await response.arrayBuffer();
 }
 
+
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
   try {
     const { session } = await safeGetSession();
     
     if (!session) {
       throw redirect(303, "/login/sign_in");
-    }
-
-    if (!wss) {
-      const httpServer = (await import('node:http')).createServer();
-      initializeWebSocketServer(httpServer);
-      httpServer.listen(3001);
     }
 
     return {
@@ -149,7 +128,7 @@ export const actions: Actions = {
         name: "provide_next_instruction",
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
         func: async (instruction) => {
-          console.log(`${instruction}`);
+          console.log(`inserting instruction: ${instruction}`);
 
           const { data, error } = await supabase
             .from('meditation_instructions')
@@ -161,18 +140,6 @@ export const actions: Actions = {
 
           if (error) throw error;
                     
-          const audioBuffer = await textToSpeech(instruction);
-          const base64Audio = Buffer.from(audioBuffer).toString('base64');
-          connections.forEach(ws => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ 
-                type: 'instruction', 
-                meditationId, 
-                instruction, 
-                audio: base64Audio 
-              }));
-            }
-          });          
           return "";
         },
       });
