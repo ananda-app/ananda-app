@@ -6,45 +6,8 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { OPENAI_API_KEY } from '$env/static/private';
 import { writable } from 'svelte/store';
-import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'http';
-
-let wss: WebSocketServer;
-let connections: WebSocket[] = [];
 
 const activeMeditations = writable<Record<number, AutoGPT>>({});
-
-function initializeWebSocketServer(server: Server) {
-  wss = new WebSocketServer({ server });
-
-  wss.on('connection', (ws) => {
-    connections.push(ws);
-    ws.on('close', () => {
-      connections = connections.filter(conn => conn !== ws);
-    });
-  });
-}
-
-async function textToSpeech(text: string) {
-  const response = await fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: "tts-1",
-      input: text,
-      voice: "alloy"
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to convert text to speech');
-  }
-
-  return await response.arrayBuffer();
-}
 
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
   try {
@@ -52,12 +15,6 @@ export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession 
     
     if (!session) {
       throw redirect(303, "/login/sign_in");
-    }
-
-    if (!wss) {
-      const httpServer = (await import('node:http')).createServer();
-      initializeWebSocketServer(httpServer);
-      httpServer.listen(3001);
     }
 
     return {
@@ -140,7 +97,7 @@ export const actions: Actions = {
           const now = new Date();
           const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
           const remainingSeconds = Math.max(0, duration * 60 - elapsedSeconds);
-          console.log(`remaining seconds: ${remainingSeconds.toFixed(0)}`);
+          console.log(`Meditation ID ${meditationId}: Remaining seconds: ${remainingSeconds.toFixed(0)}`);
           return remainingSeconds.toFixed(0);
         },
       });
@@ -149,32 +106,24 @@ export const actions: Actions = {
         name: "provide_next_instruction",
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
         func: async (instruction) => {
-          console.log(`ins: ${instruction}`);
-
           const { data, error } = await supabase
             .from('meditation_instructions')
             .insert({
               ts: new Date().toISOString(),
               meditation_id: meditationId,
               instruction: instruction
-            });
+            })
+            .select('id');
 
           if (error) throw console.log(error);
 
-          console.log("inserted instruction sucessfully")
+          if (data && data.length > 0 && 'id' in data[0]) {
+            const instructionId = data[0].id;
+            console.log(`Saved instruction ${instructionId}, ${instruction}`);
+          } else {
+            console.log("Failed to retrieve instruction ID after insertion");
+          }
                     
-          const audioBuffer = await textToSpeech(instruction);
-          const base64Audio = Buffer.from(audioBuffer).toString('base64');
-          connections.forEach(ws => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ 
-                type: 'instruction', 
-                meditationId, 
-                instruction, 
-                audio: base64Audio 
-              }));
-            }
-          });          
           return "";
         },
       });
@@ -208,6 +157,8 @@ export const actions: Actions = {
         });
       });
 
+      console.log(`Successfully started meditation ${meditationId}`);
+      
       // Return the result
       return { success: true, meditationId: meditationId };
     } catch (error) {
@@ -249,6 +200,8 @@ export const actions: Actions = {
         .eq('user_id', session.user.id);
 
       if (error) throw error;
+
+      console.log(`Successfully stopped meditation ${meditationId}`);
 
       return { success: true };
     } catch (error) {

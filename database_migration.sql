@@ -193,3 +193,7 @@ CREATE POLICY insert_meditation_instructions_on_user_id
     ON meditation_instructions
     FOR INSERT
     WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY public_select ON public.meditation_instructions
+FOR SELECT
+USING (true);    

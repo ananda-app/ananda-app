@@ -13,22 +13,12 @@
   let isMeditating = false
   let error = ""
   let meditationId: string | null = null
-  let socket: WebSocket
   let audio: HTMLAudioElement
   let channel: RealtimeChannel
 
   $: showMonitor = isMeditating
 
   onMount(() => {
-    socket = new WebSocket("ws://localhost:3001")
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === "instruction" && data.meditationId === meditationId) {
-        playInstruction(data.audio)
-      }
-    }
-
     const { supabase } = $page.data
 
     channel = supabase
@@ -40,29 +30,43 @@
           schema: "public",
           table: "meditation_instructions",
         },
-        (payload: any) => console.log(payload),
+        async (payload: any) => {
+          if (
+            payload.new &&
+            payload.new.id &&
+            payload.new.meditation_id === meditationId
+          ) {
+            try {
+              const audioUrl = await fetchAudio(payload.new.id)
+              playAudio(audioUrl)
+            } catch (error) {
+              console.error("Failed to fetch or play audio:", error)
+            }
+          }
+        },
       )
       .subscribe()
   })
 
-  onDestroy(() => {
-    if (socket) {
-      socket.close()
+  async function fetchAudio(instructionId: string) {
+    const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
+    if (!response.ok) throw new Error("Failed to fetch audio")
+    const blob = await response.blob()
+    return URL.createObjectURL(blob)
+  }
+
+  function playAudio(audioUrl: string) {
+    if (audio) {
+      audio.src = audioUrl
+      audio.play()
     }
+  }
+
+  onDestroy(() => {
     if (channel) {
       channel.unsubscribe()
     }
   })
-
-  function playInstruction(base64Audio: string) {
-    const blob = new Blob(
-      [Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0))],
-      { type: "audio/mpeg" },
-    )
-    const url = URL.createObjectURL(blob)
-    audio.src = url
-    audio.play()
-  }
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
