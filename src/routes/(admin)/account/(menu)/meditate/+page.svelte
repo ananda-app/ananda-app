@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { getContext } from "svelte"
+  import { getContext, onMount, onDestroy } from "svelte"
   import { enhance } from "$app/forms"
   import { page } from "$app/stores"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
-  import { onMount, onDestroy } from "svelte"
+  import type { RealtimeChannel } from "@supabase/supabase-js"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
@@ -15,6 +15,7 @@
   let meditationId: string | null = null
   let socket: WebSocket
   let audio: HTMLAudioElement
+  let channel: RealtimeChannel
 
   $: showMonitor = isMeditating
 
@@ -27,11 +28,29 @@
         playInstruction(data.audio)
       }
     }
+
+    const { supabase } = $page.data
+
+    channel = supabase
+      .channel("schema-db-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meditation_instructions",
+        },
+        (payload: any) => console.log(payload),
+      )
+      .subscribe()
   })
 
   onDestroy(() => {
     if (socket) {
       socket.close()
+    }
+    if (channel) {
+      channel.unsubscribe()
     }
   })
 

@@ -2,19 +2,32 @@ import {
   PUBLIC_SUPABASE_ANON_KEY,
   PUBLIC_SUPABASE_URL,
 } from "$env/static/public"
-import { createSupabaseLoadClient } from "@supabase/auth-helpers-sveltekit"
+import { createClient } from '@supabase/supabase-js'
 import type { Database } from "../../../DatabaseDefinitions.js"
 import { redirect } from "@sveltejs/kit"
 
 export const load = async ({ fetch, data, depends, url }) => {
   depends("supabase:auth")
 
-  const supabase = createSupabaseLoadClient({
-    supabaseUrl: PUBLIC_SUPABASE_URL,
-    supabaseKey: PUBLIC_SUPABASE_ANON_KEY,
-    event: { fetch },
-    serverSession: data.session,
-  })
+  const supabase = createClient<Database>(
+    PUBLIC_SUPABASE_URL,
+    PUBLIC_SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: { 'X-Client-Info': 'sveltekit' },
+      },
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    }
+  )
 
   const {
     data: { session },

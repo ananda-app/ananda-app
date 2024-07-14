@@ -179,6 +179,7 @@ SELECT create_hypertable('biometrics', 'ts');
 CREATE INDEX ON biometrics (meditation_id, ts DESC);
 
 CREATE TABLE meditation_instructions (
+    id SERIAL PRIMARY KEY,
     ts TIMESTAMPTZ NOT NULL,
     meditation_id BIGINT NOT NULL,
     instruction TEXT NOT NULL
@@ -187,3 +188,8 @@ CREATE TABLE meditation_instructions (
 SELECT create_hypertable('meditation_instructions', 'ts');
 
 CREATE INDEX ON meditation_instructions (meditation_id, ts DESC);
+
+CREATE POLICY insert_meditation_instructions_on_user_id
+    ON meditation_instructions
+    FOR INSERT
+    WITH CHECK (auth.uid() IS NOT NULL);
