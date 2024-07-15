@@ -178,6 +178,24 @@ SELECT create_hypertable('biometrics', 'ts');
 
 CREATE INDEX ON biometrics (meditation_id, ts DESC);
 
+ALTER TABLE biometrics ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can insert biometrics for their meditation sessions" ON biometrics
+FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM meditation_sessions
+    WHERE id = biometrics.meditation_id AND user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Users can view biometrics for their meditation sessions" ON biometrics
+FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM meditation_sessions
+    WHERE id = biometrics.meditation_id AND user_id = auth.uid()
+  )
+);
+
 CREATE TABLE meditation_instructions (
     id SERIAL PRIMARY KEY,
     ts TIMESTAMPTZ NOT NULL,

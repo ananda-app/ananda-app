@@ -83,8 +83,9 @@ export const actions: Actions = {
             .limit(15);
           
           if (error) throw error;
-          const csvData = ['ts,bpm,brpm,movement,elapsed_seconds', 
-            ...data.map(row => `${row.ts},${row.bpm},${row.brpm},${row.movement},${row.elapsed_seconds}`)
+          console.log(`Meditation ID ${meditationId}: Fetching biometrics data`);
+          const csvData = ['bpm,brpm,movement,elapsed_seconds', 
+            ...data.map(row => `${row.bpm},${row.brpm},${row.movement},${row.elapsed_seconds}`)
           ].join('\n');
           return csvData;
         },
@@ -106,6 +107,11 @@ export const actions: Actions = {
         name: "provide_next_instruction",
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
         func: async (instruction) => {
+          if (!instruction || instruction.trim() === "") {
+            console.log("Instruction is null or empty");
+            return "Instruction is null or empty";
+          }
+
           const { data, error } = await supabase
             .from('meditation_instructions')
             .insert({
@@ -124,12 +130,38 @@ export const actions: Actions = {
             console.log("Failed to retrieve instruction ID after insertion");
           }
                     
-          return "";
+          return "successfully played instruction";
+        }
+      });
+
+      const getSecondsSinceLastInstruction = new DynamicTool({
+        name: "get_seconds_since_last_instruction",
+        description: "Get the number of seconds since the last meditation instruction was given",
+        func: async () => {
+          const { data, error } = await supabase
+            .from('meditation_instructions')
+            .select('ts')
+            .eq('meditation_id', meditationId)
+            .order('ts', { ascending: false })
+            .limit(1);
+
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            const lastInstructionTime = new Date(data[0].ts).getTime();
+            const now = new Date().getTime();
+            const secondsSinceLastInstruction = (now - lastInstructionTime) / 1000;
+            console.log(`Meditation ID ${meditationId}: Seconds since last instruction: ${secondsSinceLastInstruction.toFixed(0)}`);
+            return secondsSinceLastInstruction.toFixed(0);
+          } else {
+            console.log("No instructions have been provided for this session");
+            return "No instructions have been provided for this session";
+          }
         },
       });
 
       const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.5, apiKey: OPENAI_API_KEY });
-      const tools = [getBiometrics, getTimeLeft, provideNextInstruction];
+      const tools = [getBiometrics, getTimeLeft, provideNextInstruction, getSecondsSinceLastInstruction];
 
       const vectorStore = new MemoryVectorStore(
         new OpenAIEmbeddings({ apiKey: OPENAI_API_KEY })

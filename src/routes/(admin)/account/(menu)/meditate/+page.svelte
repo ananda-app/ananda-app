@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { getContext, onMount, onDestroy } from "svelte"
+  import { getContext, onDestroy } from "svelte"
   import { enhance } from "$app/forms"
-  import { page } from "$app/stores"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
@@ -21,34 +20,6 @@
 
   $: showMonitor = isMeditating
 
-  onMount(() => {
-    channel = supabase
-      .channel("schema-db-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "meditation_instructions",
-        },
-        async (payload: any) => {
-          if (
-            payload.new &&
-            payload.new.id &&
-            payload.new.meditation_id === meditationId
-          ) {
-            try {
-              const audioUrl = await fetchAudio(payload.new.id)
-              playAudio(audioUrl)
-            } catch (error) {
-              console.error("Failed to fetch or play audio:", error)
-            }
-          }
-        },
-      )
-      .subscribe()
-  })
-
   async function fetchAudio(instructionId: string) {
     const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
     if (!response.ok) throw new Error("Failed to fetch audio")
@@ -64,15 +35,56 @@
   }
 
   onDestroy(() => {
-    if (channel) {
-      channel.unsubscribe()
-    }
+    unsubscribeFromInstructions()
   })
+
+  function subscribeToInstructions() {
+    try {
+      channel = supabase
+        .channel("schema-db-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "meditation_instructions",
+          },
+          async (payload: any) => {
+            if (
+              payload.new &&
+              payload.new.id &&
+              payload.new.meditation_id === meditationId
+            ) {
+              try {
+                const audioUrl = await fetchAudio(payload.new.id)
+                playAudio(audioUrl)
+              } catch (error) {
+                console.error("Failed to fetch or play audio:", error)
+              }
+            }
+          },
+        )
+        .subscribe()
+    } catch (error) {
+      console.error("Failed to subscribe to instructions:", error)
+    }
+  }
+
+  function unsubscribeFromInstructions() {
+    try {
+      if (channel) {
+        channel.unsubscribe()
+      }
+    } catch (error) {
+      console.error("Failed to unsubscribe from instructions:", error)
+    }
+  }
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
       isMeditating = true
       meditationId = result.data?.meditationId ?? null
+      subscribeToInstructions()
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
     }
@@ -92,6 +104,7 @@
         if (result.type === "success") {
           isMeditating = false
           meditationId = null
+          unsubscribeFromInstructions()
         } else {
           error = result.error || "Failed to stop meditation"
         }
