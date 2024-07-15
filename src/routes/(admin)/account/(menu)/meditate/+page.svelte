@@ -10,6 +10,9 @@
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
 
+  export let data
+  let { supabase } = data
+
   let isMeditating = false
   let error = ""
   let meditationId: string | null = null
@@ -19,8 +22,6 @@
   $: showMonitor = isMeditating
 
   onMount(() => {
-    const { supabase } = $page.data
-
     channel = supabase
       .channel("schema-db-changes")
       .on(
@@ -180,7 +181,7 @@
       </form>
     {:else}
       {#if showMonitor}
-        <BiometricsMonitor currentRoute={$page.url.pathname} {meditationId} />
+        <BiometricsMonitor {meditationId} {supabase} />
       {/if}
       <div class="w-full flex mt-4">
         <button class="btn btn-error" on:click={stopMeditation}>

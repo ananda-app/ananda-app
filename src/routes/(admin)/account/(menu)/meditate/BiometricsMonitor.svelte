@@ -4,8 +4,9 @@
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
   import { loadOpenCv } from "$lib/opencvLoader"
+  import type { SupabaseClient } from "@supabase/supabase-js" // Import the type
 
-  export let currentRoute: string
+  export let supabase: SupabaseClient // Explicitly type supabase
   export let meditationId: string | null
 
   let heartRateChart: ChartType
@@ -37,24 +38,20 @@
     meditationId: string | null
   }) {
     try {
-      const formData = new FormData()
-      Object.entries(data).forEach(([key, value]) => {
-        formData.append(key, value !== null ? value.toString() : "")
+      const { error } = await supabase.from("biometrics").insert({
+        ts: new Date(data.ts).toISOString(),
+        meditation_id: data.meditationId,
+        bpm: data.bpm,
+        brpm: data.brpm,
+        movement: data.movement,
+        elapsed_seconds: data.elapsedSeconds,
       })
 
-      const response = await fetch(`${currentRoute}?/saveBiometrics`, {
-        method: "POST",
-        body: formData,
-      })
+      if (error) throw error
 
-      if (!response.ok) {
-        throw new Error("Failed to send data to server")
-      }
-
-      const result = await response.json()
-      return result
+      return { success: true }
     } catch (error) {
-      console.error("Error sending data to server:", error)
+      console.error("Error saving biometrics:", error)
       throw error
     }
   }

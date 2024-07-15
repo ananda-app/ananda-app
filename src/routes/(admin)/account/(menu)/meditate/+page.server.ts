@@ -208,44 +208,5 @@ export const actions: Actions = {
       console.error('Error stopping meditation:', error);
       return fail(500, { error: "Failed to stop meditation" });
     }
-  },  
-
-  saveBiometrics: async ({ request, locals: { supabase, safeGetSession } }) => {
-    const { session } = await safeGetSession();
-    if (!session) {
-      return fail(401, { error: "Unauthorized" });
-    }
-  
-    const formData = await request.formData();
-    const ts = Number(formData.get('ts'));
-    const bpm = Number(formData.get('bpm'));
-    const brpm = Number(formData.get('brpm'));
-    const movement = Number(formData.get('movement'));
-    const elapsedSeconds = Number(formData.get('elapsedSeconds'));
-    const meditationId = Number(formData.get('meditationId'));
-
-    if (isNaN(ts) || isNaN(bpm) || isNaN(brpm) || isNaN(movement) || isNaN(elapsedSeconds) || isNaN(meditationId)) {
-      return fail(400, { error: "Invalid data" });
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('biometrics')
-        .insert({ 
-          ts: new Date(ts).toISOString(),
-          meditation_id: meditationId,
-          bpm, 
-          brpm, 
-          movement, 
-          elapsed_seconds: elapsedSeconds 
-        });
-      
-      if (error) throw error;
-  
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving biometrics:', error);
-      return fail(500, { error: "Failed to save biometrics data" });
-    }
-  }  
+  }
 };
