@@ -35,10 +35,12 @@
   }
 
   onDestroy(() => {
-    unsubscribeFromInstructions()
+    if (channel) {
+      channel.unsubscribe()
+    }
   })
 
-  function subscribeToInstructions() {
+  function subscribeToDbChanges() {
     try {
       channel = supabase
         .channel("schema-db-changes")
@@ -47,36 +49,38 @@
           {
             event: "*",
             schema: "public",
-            table: "meditation_instructions",
           },
           async (payload: any) => {
-            if (
-              payload.new &&
-              payload.new.id &&
-              payload.new.meditation_id === meditationId
-            ) {
-              try {
-                const audioUrl = await fetchAudio(payload.new.id)
-                playAudio(audioUrl)
-              } catch (error) {
-                console.error("Failed to fetch or play audio:", error)
+            console.log(payload)
+            if (payload.table === "meditation_instructions") {
+              if (
+                payload.new &&
+                payload.new.id &&
+                payload.new.meditation_id === meditationId
+              ) {
+                try {
+                  console.log(`instruction: ${payload.new.instruction}`)
+                  const audioUrl = await fetchAudio(payload.new.id)
+                  playAudio(audioUrl)
+                } catch (error) {
+                  console.error("Failed to fetch or play audio:", error)
+                }
+              }
+            } else if (payload.table === "meditation_sessions") {
+              if (
+                payload.new.end_ts !== null &&
+                payload.new.id === meditationId
+              ) {
+                console.log(`stopping meditation ${meditationId}`)
+                isMeditating = false
+                meditationId = null
               }
             }
           },
         )
         .subscribe()
     } catch (error) {
-      console.error("Failed to subscribe to instructions:", error)
-    }
-  }
-
-  function unsubscribeFromInstructions() {
-    try {
-      if (channel) {
-        channel.unsubscribe()
-      }
-    } catch (error) {
-      console.error("Failed to unsubscribe from instructions:", error)
+      console.error("Failed to subscribe to db changes:", error)
     }
   }
 
@@ -84,7 +88,7 @@
     if (result.type === "success") {
       isMeditating = true
       meditationId = result.data?.meditationId ?? null
-      subscribeToInstructions()
+      subscribeToDbChanges()
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
     }
@@ -104,7 +108,6 @@
         if (result.type === "success") {
           isMeditating = false
           meditationId = null
-          unsubscribeFromInstructions()
         } else {
           error = result.error || "Failed to stop meditation"
         }

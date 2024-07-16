@@ -1,4 +1,3 @@
-// src/hooks.server.ts
 import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_ANON_KEY,
@@ -21,11 +20,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     { auth: { persistSession: false } },
   )
 
-  /**
-   * Unlike `supabase.auth.getSession()`, which returns the session _without_
-   * validating the JWT, this function also calls `getUser()` to validate the
-   * JWT before returning the session.
-   */
   event.locals.safeGetSession = async () => {
     const {
       data: { session },
@@ -39,18 +33,23 @@ export const handle: Handle = async ({ event, resolve }) => {
       error,
     } = await event.locals.supabase.auth.getUser()
     if (error) {
-      // JWT validation has failed
       return { session: null, user: null }
     }
 
     return { session, user }
   }
 
-  await event.locals.safeGetSession()
-
   return resolve(event, {
     filterSerializedResponseHeaders(name) {
       return name === "content-range"
     },
+    transformPageChunk: async ({ html }) => {
+      try {
+        await event.locals.safeGetSession()
+      } catch (error) {
+        console.error('Error in safeGetSession:', error)
+      }
+      return html
+    }
   })
 }

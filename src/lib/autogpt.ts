@@ -26,6 +26,7 @@ export interface AutoGPTInput {
 export class AutoGPT {
   private meditationId: number;
   private comments: string;
+  private technique: string;
   private memory: VectorStoreRetrieverInterface;
   private fullMessageHistory: BaseMessage[] = [];
   private chain: RunnableSequence;
@@ -38,13 +39,15 @@ export class AutoGPT {
 
   constructor(
     meditationId: number,
+    technique: string,
     comments: string,
     llm: BaseChatModel,
     tools: ObjectTool[],
-    { memory, maxIterations = 1000, sendTokenLimit = 4096 }: AutoGPTInput & { sendTokenLimit?: number }
+    { memory, maxIterations = 1000, sendTokenLimit = 100000 }: AutoGPTInput & { sendTokenLimit?: number }
   ) {
     this.meditationId = meditationId;
     this.comments = comments;
+    this.technique = technique;
     this.tools = tools;
     this.memory = memory;
     this.maxIterations = maxIterations;
@@ -82,36 +85,38 @@ export class AutoGPT {
   
   private constructPrompt(): string {
     const basePrompt = `
-  You are a expert meditation coach who conducts guided meditation sessions based on the biometric stats of the user.
-  Conduct the session in three stages: Grounding, Immersion and Closure. Instructions for each stage is detailed below.
-  Think step by step. Base your decisions on primarily on the biometric stats. Continiously monitor it throughout the session.
-  Before providing the next instruction, get the seconds since last instruction and ensure that at least 60 seconds has elapsed.
-  Note that the biometrics stats are estimated from the live video feed using computer vision algorithms.
-  Start by checking the time left in the session. Keep track of it and make sure to plan each stage accordingly.
-  Your decisions must always be made independently without seeking user assistance.
+  As an expert meditation coach, your job is to conduct a ${this.technique} meditation sessions using the biometric and time stats to as a guide. 
+  Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
+  Think step by step. Base your decisions on primarily on the biometric and time stats. Continiously monitor those throughout the session.
+  The biometrics stats are estimated from the live video feed using rPPG algorithm. They may indicate the mental/physical state of the user.
+  Go into the monitoring mode for after providing any instruction. Alternate between checking the time and biometric stats in this mode.
+  Biometrics are collected every 2.5 seconds. If any data points are missing, it may indicate wrong posture. Instruct the user to sit up and look straight.
+  Instructions MUST be spaced at least 45-60 seconds apart. Check time stats and wait before providing the next instruction.
+  Keep the instructions brief. Encourage and reassure the user whenever possible. Be creative. 
+  Keep track of the time left in the meditation session. Plan each stage accordingly.
+  When all stages are complete, use the "${FINISH_NAME}" command (without any args) to exit. 
   
-  Goals: {goals}
-
   User Comments: 
   ${this.comments}
 
   Grouding Stage Instructions:
-  - Provide instructions to adopt a comfortable posture, take few deep breaths and relax.
-  - Ask the user to set an intention.
-  - Keep monitoring the biometrics continiously. 
-  - Move to the Immersion stage when biometrics settle down.
+  - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
+  - Ask the user to set an intention to sit still.
+  - Start monitoring the biometrics. 
+  - Move to the next stage when biometrics settle down.
 
   Immersion Stage Instructions:
-  - Provide technique specifc instructions. 
-  - Ask the user to focus on the object of meditation and return if distracted. 
-  - Keep monitoring the biometrics continiously. Interrupt with an instruction only if there's any changes. Keep monitoring otherwise.
-  - Move to the Clousure stage when a time left nears 1 minute or so.
+  - Start by providing instructions for ${this.technique} meditation technique.
+  - Go into monitoring mode. Alternate between time stats and biometric stats.
+  - Changes to the stats may indicate the user has lost focus. Instruct the user to return.
+  - Instruct the user to correct posture and look straight on missing points in biometric stats.
+  - Move to the next stage ONLY when less than 60 seconds are left in the session.
 
   Clousure Stage Instructions:
   - Provide intructions to reflect on the session and current mental state.
-  - Ask user to rub the hands together, place the palms on the eyes and slide it downwards.
-  - Suggest to do a namaste gesture to express gratitude.
-  - Provide instruction to try and keep practicing it for the rest of the day. 
+  - Ask user to rub the hands together, place the palms on the eyes and open it.
+  - Ask the user to try and keep practicing it for the rest of the day. 
+  - End this stage with a goodbye.
   
   Constraints:
   1. If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.
@@ -120,13 +125,13 @@ export class AutoGPT {
   
   Commands:
   ${this.tools.map((tool, i) => `${i + 1}. ${this.generateCommandString(tool)}`).join('\n')}
-  ${this.tools.length + 1}. "${FINISH_NAME}": use this to signal that you have finished all your objectives, args: "response": "final response to let people know you have finished your objectives"
+  ${this.tools.length + 1}. "${FINISH_NAME}": use this to signal that you have completed the meditation session"
     
   Performance Evaluation:
-  1. Continuously review and analyze your actions to ensure you are performing to the best of your abilities.
+  1. Continuously review and analyze your actions, biometrics and time stats to ensure you are performing to the best of your abilities.
   2. Constructively self-criticize your big-picture behavior constantly.
   3. Reflect on past decisions and strategies to refine your approach.
-  4. Every command has a cost, so be smart and efficient. Aim to complete tasks in the least number of steps.
+  4. Think about how frequently did you check the biometrics and time stats.
   
   You should only respond in JSON format as described below:
   
@@ -134,7 +139,8 @@ export class AutoGPT {
   {
     "thoughts": {
       "meditation_id": ${this.meditationId},
-      "seconds_left": 0,
+      "elapsed_seconds": 0,
+      "seconds_left_in_session": 0,
       "seconds_since_last_instruction": 0,
       "stage": "meditation stage",
       "text": "thought",
@@ -161,7 +167,7 @@ export class AutoGPT {
     return `"${tool.name}": ${tool.description}, args json schema: ${JSON.stringify(schema.properties)}`;
   }
 
-  private async formatMessages(goals: string[], userInput: string): Promise<BaseMessage[]> {
+  private async formatMessages(userInput: string): Promise<BaseMessage[]> {
     const basePrompt = new SystemMessage(this.constructPrompt());
     const timePrompt = new SystemMessage(
       `The current time and date is ${new Date().toLocaleString()}`
@@ -181,7 +187,7 @@ export class AutoGPT {
       Promise.resolve(0)
     );
   
-    while (usedTokens + relevantMemoryTokens > 2500) {
+    while (usedTokens + relevantMemoryTokens > 50000) {
       relevantMemory.pop();
       relevantMemoryTokens = await relevantMemory.reduce(
         async (acc: Promise<number>, doc: string) => (await acc) + await this.countTokens(doc),
@@ -215,18 +221,14 @@ export class AutoGPT {
     ];
   }
 
-  async run(goals: string[]): Promise<string | undefined> {
+  async run(): Promise<string | undefined> {
     const userInput = "Determine which next command to use, and respond using the format specified above:";
     let loopCount = 0;
     while (loopCount < this.maxIterations) {
       loopCount += 1;
 
-      const messages = await this.formatMessages(goals, userInput);
-      
-      const response = await this.chain.invoke({
-        messages,
-        goals,
-      });
+      const messages = await this.formatMessages(userInput);      
+      const response = await this.chain.invoke({messages});
 
       const assistantReply = response.content;
       console.log(assistantReply);

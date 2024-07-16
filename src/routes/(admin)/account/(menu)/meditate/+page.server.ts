@@ -2,6 +2,8 @@ import { fail, redirect, json } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { AutoGPT } from "$lib/autogpt";
 import { DynamicTool } from "@langchain/core/tools";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { OPENAI_API_KEY } from '$env/static/private';
@@ -69,11 +71,11 @@ export const actions: Actions = {
       }
       const meditationId = Number(data[0].id); 
 
-      const getBiometrics = new DynamicTool({
-        name: "get_biometrics",
-        description: `Get the biometric stats of the user for the last 30 seconds or so in CSV format. 
-                      The stats returned are heart rate (beats per minute), breathing rate (breaths per minute), 
-                      movement score (0 is absolutely still). These stats are estimated from the live video feed.`,
+      const getBiometricStats = new DynamicTool({
+        name: "get_biometric_stats",
+        description: `Get the biometric stats of the user for the last 30 seconds in CSV format. 
+                      The stats returned are elapsed seconds, heart beats per minute (bpm),  
+                      breaths per minute (brpm), movement score (0 is absolutely still).`,
         func: async () => {
           const { data, error } = await supabase
             .from('biometrics')
@@ -84,32 +86,20 @@ export const actions: Actions = {
           
           if (error) throw error;
           console.log(`Meditation ID ${meditationId}: Fetching biometrics data`);
-          const csvData = ['bpm,brpm,movement,elapsed_seconds', 
-            ...data.map(row => `${row.bpm},${row.brpm},${row.movement},${row.elapsed_seconds}`)
+          const csvData = ['elapsed_seconds,bpm,brpm,movement,elapsed_seconds', 
+            ...data.map(row => `${row.elapsed_seconds},${row.bpm},${row.brpm},${row.movement}`)
           ].join('\n');
           return csvData;
-        },
-      });
-
-      const getTimeLeft = new DynamicTool({
-        name: "get_time_left",
-        description: "Get the remaining time in the meditation session in seconds",
-        func: async () => {
-          const now = new Date();
-          const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
-          const remainingSeconds = Math.max(0, duration * 60 - elapsedSeconds);
-          console.log(`Meditation ID ${meditationId}: Remaining seconds: ${remainingSeconds.toFixed(0)}`);
-          return remainingSeconds.toFixed(0);
         },
       });
 
       const provideNextInstruction = new DynamicTool({
         name: "provide_next_instruction",
         description: "Provide the next meditation instruction to the user. Input should be the instruction as a string.",
-        func: async (instruction) => {
+        func: async (instruction: string) => {
           if (!instruction || instruction.trim() === "") {
-            console.log("Instruction is null or empty");
-            return "Instruction is null or empty";
+            console.log(`Instruction is null or empty, ${instruction}`);
+            return "Instruction is null or empty. Check the args.";
           }
 
           const { data, error } = await supabase
@@ -130,14 +120,18 @@ export const actions: Actions = {
             console.log("Failed to retrieve instruction ID after insertion");
           }
                     
-          return "successfully played instruction";
+          return "Successfully played instruction";
         }
       });
 
-      const getSecondsSinceLastInstruction = new DynamicTool({
-        name: "get_seconds_since_last_instruction",
-        description: "Get the number of seconds since the last meditation instruction was given",
+      const getTimeStats = new DynamicTool({
+        name: "get_time_stats",
+        description: "Get the elapsed seconds, remaining seconds, and seconds since last instruction",
         func: async () => {
+          const now = new Date();
+          const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
+          const remainingSeconds = Math.max(0, duration * 60 - elapsedSeconds);
+
           const { data, error } = await supabase
             .from('meditation_instructions')
             .select('ts')
@@ -147,27 +141,28 @@ export const actions: Actions = {
 
           if (error) throw error;
 
+          let secondsSinceLastInstruction = "60";
           if (data && data.length > 0) {
             const lastInstructionTime = new Date(data[0].ts).getTime();
-            const now = new Date().getTime();
-            const secondsSinceLastInstruction = (now - lastInstructionTime) / 1000;
-            console.log(`Meditation ID ${meditationId}: Seconds since last instruction: ${secondsSinceLastInstruction.toFixed(0)}`);
-            return secondsSinceLastInstruction.toFixed(0);
-          } else {
-            console.log("No instructions have been provided for this session");
-            return "No instructions have been provided for this session";
+            secondsSinceLastInstruction = ((now.getTime() - lastInstructionTime) / 1000).toFixed(0);
           }
+
+          const timeStats = `elapsed_seconds: ${elapsedSeconds.toFixed(0)},\n` +
+                            `seconds_left_in_session: ${remainingSeconds.toFixed(0)},\n` +
+                            `seconds_since_last_instruction: ${secondsSinceLastInstruction}`;
+          console.log(`Meditation ID ${meditationId}: Time stats:\n${timeStats}`);
+          return timeStats;
         },
       });
 
-      const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.5, apiKey: OPENAI_API_KEY });
-      const tools = [getBiometrics, getTimeLeft, provideNextInstruction, getSecondsSinceLastInstruction];
+      const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY });
+      const tools = [getBiometricStats, getTimeStats, provideNextInstruction];
 
       const vectorStore = new MemoryVectorStore(
         new OpenAIEmbeddings({ apiKey: OPENAI_API_KEY })
       );
 
-      const autogpt = new AutoGPT(meditationId, comments ?? '', llm, tools, {
+      const autogpt = new AutoGPT(meditationId, technique, comments ?? '', llm, tools, {
         memory: vectorStore.asRetriever(),
       });
 
@@ -177,10 +172,22 @@ export const actions: Actions = {
       }));      
 
       // Run AutoGPT in the background
-      autogpt.run([`Conduct a ${technique} meditation session`]).then(result => {
-        console.log(`AutoGPT execution completed for meditation ${meditationId}: ${result}`);
+      autogpt.run().then(async () => {
+        console.log(`AutoGPT execution completed for meditation ${meditationId}`);
+
+        const { error } = await supabase
+          .from('meditation_sessions')
+          .update({ end_ts: new Date() })
+          .eq('id', meditationId)
+          .eq('user_id', session.user.id);
+
+        if (error) throw error;
+
+        console.log(`Stopped meditation ${meditationId}`);
+
       }).catch(error => {
         console.error(`AutoGPT error for meditation ${meditationId}:`, error);
+
       }).finally(() => {
         // Clean up the store
         activeMeditations.update(meditations => {
