@@ -89,7 +89,7 @@ export const actions: Actions = {
           const csvData = ['elapsed_seconds,bpm,brpm,movement,elapsed_seconds', 
             ...data.map(row => `${row.elapsed_seconds},${row.bpm},${row.brpm},${row.movement}`)
           ].join('\n');
-          return csvData;
+          return '\n' + csvData;
         },
       });
 
@@ -115,7 +115,7 @@ export const actions: Actions = {
 
           if (data && data.length > 0 && 'id' in data[0]) {
             const instructionId = data[0].id;
-            console.log(`Saved instruction ${instructionId}, ${instruction}`);
+            console.log(`Saved instruction ${instructionId}: ${instruction}`);
           } else {
             console.log("Failed to retrieve instruction ID after insertion");
           }
@@ -124,45 +124,14 @@ export const actions: Actions = {
         }
       });
 
-      const getTimeStats = new DynamicTool({
-        name: "get_time_stats",
-        description: "Get the elapsed seconds, remaining seconds, and seconds since last instruction",
-        func: async () => {
-          const now = new Date();
-          const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
-          const remainingSeconds = Math.max(0, duration * 60 - elapsedSeconds);
-
-          const { data, error } = await supabase
-            .from('meditation_instructions')
-            .select('ts')
-            .eq('meditation_id', meditationId)
-            .order('ts', { ascending: false })
-            .limit(1);
-
-          if (error) throw error;
-
-          let secondsSinceLastInstruction = "60";
-          if (data && data.length > 0) {
-            const lastInstructionTime = new Date(data[0].ts).getTime();
-            secondsSinceLastInstruction = ((now.getTime() - lastInstructionTime) / 1000).toFixed(0);
-          }
-
-          const timeStats = `elapsed_seconds: ${elapsedSeconds.toFixed(0)},\n` +
-                            `seconds_left_in_session: ${remainingSeconds.toFixed(0)},\n` +
-                            `seconds_since_last_instruction: ${secondsSinceLastInstruction}`;
-          console.log(`Meditation ID ${meditationId}: Time stats:\n${timeStats}`);
-          return timeStats;
-        },
-      });
-
       const llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY });
-      const tools = [getBiometricStats, getTimeStats, provideNextInstruction];
+      const tools = [getBiometricStats, provideNextInstruction];
 
       const vectorStore = new MemoryVectorStore(
         new OpenAIEmbeddings({ apiKey: OPENAI_API_KEY })
       );
 
-      const autogpt = new AutoGPT(meditationId, technique, comments ?? '', llm, tools, {
+      const autogpt = new AutoGPT(meditationId, technique, comments ?? '', duration, llm, tools, {
         memory: vectorStore.asRetriever(),
       });
 

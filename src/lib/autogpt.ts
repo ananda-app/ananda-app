@@ -36,11 +36,16 @@ export class AutoGPT {
   private sendTokenLimit: number;
   private encoding: any = null;
   private abortFlag: boolean = false;
+  private elapsedSeconds: number = 0;
+  private secondsLeftInSession: number = 0;
+  private secondsSinceLastInstruction: number = 0;
+  private sessionDuration: number;
 
   constructor(
     meditationId: number,
     technique: string,
     comments: string,
+    durationMinutes: number,
     llm: BaseChatModel,
     tools: ObjectTool[],
     { memory, maxIterations = 1000, sendTokenLimit = 100000 }: AutoGPTInput & { sendTokenLimit?: number }
@@ -48,6 +53,8 @@ export class AutoGPT {
     this.meditationId = meditationId;
     this.comments = comments;
     this.technique = technique;
+    this.sessionDuration = durationMinutes * 60;  // Convert minutes to seconds
+    this.secondsLeftInSession = this.sessionDuration;  
     this.tools = tools;
     this.memory = memory;
     this.maxIterations = maxIterations;
@@ -85,16 +92,14 @@ export class AutoGPT {
   
   private constructPrompt(): string {
     const basePrompt = `
-  As an expert meditation coach, your job is to conduct a ${this.technique} meditation sessions using the biometric and time stats to as a guide. 
+  As an meditation guru, your task is to conduct a ${this.technique} meditation sessions using the biometric stats as a guide. 
   Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
-  Think step by step. Base your decisions on primarily on the biometric and time stats. Continiously monitor those throughout the session.
+  The session will last ${(this.sessionDuration / 60).toFixed(0)} minutes. Keep track of the time left and plan each stage accordingly.
+  Think step by step. Base your decisions on the biometric stats. Continiously monitor biometrics throughout the session.
   The biometrics stats are estimated from the live video feed using rPPG algorithm. They may indicate the mental/physical state of the user.
-  Go into the monitoring mode for after providing any instruction. Alternate between checking the time and biometric stats in this mode.
-  Biometrics are collected every 2.5 seconds. If any data points are missing, it may indicate wrong posture. Instruct the user to sit up and look straight.
-  Instructions MUST be spaced at least 45-60 seconds apart. Check time stats and wait before providing the next instruction.
+  Go into monitoring mode after each instruction. Provide the next instruction only when seconds since last instruction is 60 or more.
   Keep the instructions brief. Encourage and reassure the user whenever possible. Be creative. 
-  Keep track of the time left in the meditation session. Plan each stage accordingly.
-  When all stages are complete, use the "${FINISH_NAME}" command (without any args) to exit. 
+  When all stages are complete, use the "${FINISH_NAME}" command to exit. 
   
   User Comments: 
   ${this.comments}
@@ -108,8 +113,9 @@ export class AutoGPT {
   Immersion Stage Instructions:
   - Start by providing instructions for ${this.technique} meditation technique.
   - Go into monitoring mode. Alternate between time stats and biometric stats.
-  - Changes to the stats may indicate the user has lost focus. Instruct the user to return.
-  - Instruct the user to correct posture and look straight on missing points in biometric stats.
+  - Changes to the stats may indicate the user has lost focus. 
+  - Keep monitoring if the biometrics remain stable. Interrupt only if they change.
+  - Do not repeat the same instruction. Mix it up.
   - Move to the next stage ONLY when less than 60 seconds are left in the session.
 
   Clousure Stage Instructions:
@@ -131,7 +137,8 @@ export class AutoGPT {
   1. Continuously review and analyze your actions, biometrics and time stats to ensure you are performing to the best of your abilities.
   2. Constructively self-criticize your big-picture behavior constantly.
   3. Reflect on past decisions and strategies to refine your approach.
-  4. Think about how frequently did you check the biometrics and time stats.
+  4. Evaluate if the instructions were spaced at least 60s apart.
+  5. Reflect if the closure stage was only after less than 60 seconds was left.
   
   You should only respond in JSON format as described below:
   
@@ -139,12 +146,12 @@ export class AutoGPT {
   {
     "thoughts": {
       "meditation_id": ${this.meditationId},
-      "elapsed_seconds": 0,
-      "seconds_left_in_session": 0,
-      "seconds_since_last_instruction": 0,
+      "elapsed_seconds": "elapsed seconds",
+      "seconds_left_in_session": "seconds left in session",
+      "seconds_since_last_instruction": "seconds since last instruction",
       "stage": "meditation stage",
       "text": "thought",
-      "biometrics": "analysis of the biometric data",
+      "biometrics": "analysis of the biometric stats",
       "reasoning": "reasoning for the chosen action",
       "plan": ["short list", "that conveys", "long-term plan"],
       "criticism": "constructive self-criticism of the plan",
@@ -222,10 +229,26 @@ export class AutoGPT {
   }
 
   async run(): Promise<string | undefined> {
-    const userInput = "Determine which next command to use, and respond using the format specified above:";
+    const baseUserInput = "Determine which next command to use, and respond using the format specified above:";
     let loopCount = 0;
+    const startTime = Date.now();
+    let lastInstructionTime = startTime - 100000; // Set initial secondsSinceLastInstruction to 100
+
     while (loopCount < this.maxIterations) {
       loopCount += 1;
+
+      // Update time stats
+      const currentTime = Date.now();
+      this.elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+      this.secondsLeftInSession = Math.max(0, this.sessionDuration - this.elapsedSeconds);
+      this.secondsSinceLastInstruction = Math.floor((currentTime - lastInstructionTime) / 1000);
+
+      const timeStats = `Time Stats:
+      - elapsed_seconds: ${this.elapsedSeconds}
+      - seconds_left_in_session: ${this.secondsLeftInSession}
+      - seconds_since_last_instruction: ${this.secondsSinceLastInstruction}`;
+
+      const userInput = `${timeStats}\n\n${baseUserInput}`;      
 
       const messages = await this.formatMessages(userInput);      
       const response = await this.chain.invoke({messages});
@@ -248,6 +271,10 @@ export class AutoGPT {
         try {
           const observation = await tool.invoke(action.args);
           result = `Command ${tool.name} returned: ${observation}`;
+
+          if (tool.name.toLowerCase().includes("instruction")) {
+            lastInstructionTime = currentTime;
+          }          
         } catch (e) {
           result = `Error in args: ${e}`;
         }
