@@ -12,13 +12,13 @@
   export let data
   let { supabase } = data
 
-  let isMeditating = false
+  let meditationStatus: "idle" | "meditating" | "ended" = "idle"
   let error = ""
   let meditationId: string | null = null
   let audio: HTMLAudioElement
   let channel: RealtimeChannel
 
-  $: showMonitor = isMeditating
+  $: showMonitor = meditationStatus === "meditating"
 
   async function fetchAudio(instructionId: string) {
     const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
@@ -51,7 +51,6 @@
             schema: "public",
           },
           async (payload: any) => {
-            console.log(payload)
             if (payload.table === "meditation_instructions") {
               if (
                 payload.new &&
@@ -72,7 +71,7 @@
                 payload.new.id === meditationId
               ) {
                 console.log(`stopping meditation ${meditationId}`)
-                isMeditating = false
+                meditationStatus = "ended"
                 meditationId = null
               }
             }
@@ -86,7 +85,7 @@
 
   function handleResult(result: ActionResult) {
     if (result.type === "success") {
-      isMeditating = true
+      meditationStatus = "meditating"
       meditationId = result.data?.meditationId ?? null
       subscribeToDbChanges()
     } else if (result.type === "failure") {
@@ -106,7 +105,7 @@
         })
         const result = await response.json()
         if (result.type === "success") {
-          isMeditating = false
+          meditationStatus = "ended"
           meditationId = null
         } else {
           error = result.error || "Failed to stop meditation"
@@ -117,6 +116,11 @@
       }
     }
   }
+
+  function startNewSession() {
+    meditationStatus = "idle"
+    error = ""
+  }
 </script>
 
 <svelte:head>
@@ -126,7 +130,19 @@
 <div class="w-full max-w-md">
   <div class="">
     <h1 class="text-2xl font-bold text-gray-800 mb-4">Meditate</h1>
-    {#if !isMeditating}
+    {#if meditationStatus === "ended"}
+      <div class="alert alert-success">
+        <p>
+          Great job! You have sucessfully completed the meditation session.
+          <button
+            on:click={startNewSession}
+            class="btn btn-link p-0 h-auto min-h-0 text-blue-700 hover:text-blue-900"
+          >
+            Start Another Session
+          </button>
+        </p>
+      </div>
+    {:else if meditationStatus === "idle"}
       <p class="text-gray-600 mb-6">
         Please enter the details below to start. Ensure that you are in a well
         lighted area and your face is cleartly visible.
@@ -183,7 +199,7 @@
             <textarea
               id="comments"
               name="comments"
-              placeholder="E.g., your current mood, goals, substances..."
+              placeholder="E.g., your current mood, goals, favorite teacher, etc."
               class="textarea textarea-bordered w-full"
             ></textarea>
           </div>

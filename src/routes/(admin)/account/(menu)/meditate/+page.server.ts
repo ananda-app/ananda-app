@@ -111,7 +111,7 @@ export const actions: Actions = {
             })
             .select('id');
 
-          if (error) throw console.log(error);
+          if (error) throw error;
 
           if (data && data.length > 0 && 'id' in data[0]) {
             const instructionId = data[0].id;

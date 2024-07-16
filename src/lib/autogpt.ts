@@ -92,13 +92,13 @@ export class AutoGPT {
   
   private constructPrompt(): string {
     const basePrompt = `
-  As an meditation guru, your task is to conduct a ${this.technique} meditation sessions using the biometric stats as a guide. 
+  As an meditation guru, your task is to conduct a ${this.technique} meditation session using the biometric stats to track the progress. 
   Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
   The session will last ${(this.sessionDuration / 60).toFixed(0)} minutes. Keep track of the time left and plan each stage accordingly.
-  Think step by step. Base your decisions on the biometric stats. Continiously monitor biometrics throughout the session.
+  Think step by step. Base your decisions on the biometric stats and previous steps. Continiously monitor biometrics throughout the session.
   The biometrics stats are estimated from the live video feed using rPPG algorithm. They may indicate the mental/physical state of the user.
   Go into monitoring mode after each instruction. Provide the next instruction only when seconds since last instruction is 60 or more.
-  Keep the instructions brief. Encourage and reassure the user whenever possible. Be creative. 
+  Keep the instructions brief. Encourage and reassure the user whenever possible. Do NOT repeat the same instruction. Mix it up. Be creative. 
   When all stages are complete, use the "${FINISH_NAME}" command to exit. 
   
   User Comments: 
@@ -112,11 +112,9 @@ export class AutoGPT {
 
   Immersion Stage Instructions:
   - Start by providing instructions for ${this.technique} meditation technique.
-  - Go into monitoring mode. Alternate between time stats and biometric stats.
   - Changes to the stats may indicate the user has lost focus. 
   - Keep monitoring if the biometrics remain stable. Interrupt only if they change.
-  - Do not repeat the same instruction. Mix it up.
-  - Move to the next stage ONLY when less than 60 seconds are left in the session.
+  - Move to the next stage ONLY when seconds left in session is less than 60.
 
   Clousure Stage Instructions:
   - Provide intructions to reflect on the session and current mental state.
@@ -137,8 +135,6 @@ export class AutoGPT {
   1. Continuously review and analyze your actions, biometrics and time stats to ensure you are performing to the best of your abilities.
   2. Constructively self-criticize your big-picture behavior constantly.
   3. Reflect on past decisions and strategies to refine your approach.
-  4. Evaluate if the instructions were spaced at least 60s apart.
-  5. Reflect if the closure stage was only after less than 60 seconds was left.
   
   You should only respond in JSON format as described below:
   
@@ -146,15 +142,17 @@ export class AutoGPT {
   {
     "thoughts": {
       "meditation_id": ${this.meditationId},
-      "elapsed_seconds": "elapsed seconds",
-      "seconds_left_in_session": "seconds left in session",
-      "seconds_since_last_instruction": "seconds since last instruction",
       "stage": "meditation stage",
       "text": "thought",
       "biometrics": "analysis of the biometric stats",
-      "reasoning": "reasoning for the chosen action",
+      "reasoning": "reasoning",
       "plan": ["short list", "that conveys", "long-term plan"],
       "criticism": "constructive self-criticism of the plan",
+      "time_stats": {
+        "elapsed_seconds": "elapsed seconds",
+        "seconds_left_in_session": "seconds left in session",
+        "seconds_since_last_instruction": "seconds since last instruction",
+      }
     },
     "command": {
       "name": "command name",
@@ -233,6 +231,7 @@ export class AutoGPT {
     let loopCount = 0;
     const startTime = Date.now();
     let lastInstructionTime = startTime - 100000; // Set initial secondsSinceLastInstruction to 100
+    let thoughts = {"stage": "grounding"};
 
     while (loopCount < this.maxIterations) {
       loopCount += 1;
@@ -248,7 +247,16 @@ export class AutoGPT {
       - seconds_left_in_session: ${this.secondsLeftInSession}
       - seconds_since_last_instruction: ${this.secondsSinceLastInstruction}`;
 
-      const userInput = `${timeStats}\n\n${baseUserInput}`;      
+      let userInput;
+      if (this.secondsSinceLastInstruction < 60) {
+        userInput = `${timeStats}\n\nWait before providing the next instruction. ${baseUserInput}`;
+      } else {
+        userInput = `${timeStats}\n\nNext instruction may be provided now. ${baseUserInput}`;
+      }
+
+      if (this.secondsLeftInSession < 60 && thoughts.stage !== "closure") {
+        userInput = `${timeStats}\n\nTime to move to closure stage. ${baseUserInput}`;
+      }
 
       const messages = await this.formatMessages(userInput);      
       const response = await this.chain.invoke({messages});
@@ -258,7 +266,10 @@ export class AutoGPT {
       this.fullMessageHistory.push(new HumanMessage(userInput));
       this.fullMessageHistory.push(new AIMessage(assistantReply));
 
-      const action = await this.parseOutput(assistantReply);
+      const parsed = this.parseOutput(assistantReply);
+      const action = parsed.command;
+      thoughts = parsed.thoughts; 
+
       const tools = Object.fromEntries(this.tools.map(tool => [tool.name, tool]));
 
       if (action.name === FINISH_NAME) {
@@ -298,31 +309,29 @@ export class AutoGPT {
     return undefined;
   }
 
-  private async parseOutput(text: string): Promise<AutoGPTAction> {
+  private parseOutput(text: string): any {
     const preprocessJsonInput = (input: string): string => {
       const corrected = input.replace(/(?<!\\)\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, "\\\\");
       const match = corrected.match(/```(.*)(\r\n|\r|\n)(?<code>[\w\W\n]+)(\r\n|\r|\n)```/);
       return match?.groups?.code?.trim() || corrected;
     };
-
+  
     try {
-      const parsed = JSON.parse(text);
-      return {
-        name: parsed.command.name,
-        args: parsed.command.args,
-      };
+      return JSON.parse(text);
     } catch (error) {
       const preprocessedText = preprocessJsonInput(text);
       try {
-        const parsed = JSON.parse(preprocessedText);
-        return {
-          name: parsed.command.name,
-          args: parsed.command.args,
-        };
+        return JSON.parse(preprocessedText);
       } catch (error) {
         return {
-          name: "ERROR",
-          args: { error: `Could not parse invalid json: ${text}` },
+          thoughts: {
+            text: "Error parsing JSON",
+            stage: "error"
+          },
+          command: {
+            name: "ERROR",
+            args: { error: `Could not parse invalid json: ${text}` }
+          }
         };
       }
     }
