@@ -215,3 +215,13 @@ CREATE POLICY insert_meditation_instructions_on_user_id
 CREATE POLICY public_select ON public.meditation_instructions
 FOR SELECT
 USING (true);    
+
+ALTER TABLE public.meditation_instructions
+ADD CONSTRAINT fk_meditation_session
+FOREIGN KEY (meditation_id) 
+REFERENCES public.meditation_sessions(id);
+
+ALTER TABLE public.biometrics
+ADD CONSTRAINT fk_meditation_session
+FOREIGN KEY (meditation_id) 
+REFERENCES public.meditation_sessions(id);
