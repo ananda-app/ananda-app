@@ -129,7 +129,7 @@
 
 <div class="w-full max-w-md">
   <div class="">
-    <h1 class="text-2xl font-bold text-gray-800 mb-4">Meditate</h1>
+    <h1 class="text-2xl font-bold mb-6">Meditate</h1>
     {#if meditationStatus === "ended"}
       <div class="alert alert-success">
         <p>
