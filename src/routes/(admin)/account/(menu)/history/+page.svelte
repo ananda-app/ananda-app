@@ -2,6 +2,7 @@
   import { getContext, onMount } from "svelte"
   import type { Writable } from "svelte/store"
   import BiometricsChart from "./BiometricsChart.svelte"
+  import { formatTechnique } from "$lib/formatUtils"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("history")
@@ -95,11 +96,13 @@
       <div class="card bg-base-100 shadow">
         <div class="card-body">
           <h2 class="card-title">
-            {session.technique} - {session.duration} minutes
+            {formatTechnique(session.technique)} - {session.duration} minutes
           </h2>
           <p>Start: {new Date(session.start_ts).toLocaleString()}</p>
           <p>End: {new Date(session.end_ts).toLocaleString()}</p>
-          <p class="italic">""{session.comments}""</p>
+          {#if session.comments}
+            <p class="italic">"{session.comments}"</p>
+          {/if}
           <div class="my-4">
             <BiometricsChart
               biometrics={session.biometrics}

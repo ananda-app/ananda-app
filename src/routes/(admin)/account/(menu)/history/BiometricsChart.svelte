@@ -169,12 +169,9 @@
                 tooltipEl.style.opacity = "1"
                 tooltipEl.style.position = "absolute"
                 tooltipEl.style.left =
-                  position.left +
-                  window.pageXOffset +
-                  tooltipModel.caretX +
-                  "px"
+                  position.left + window.scrollX + tooltipModel.caretX + "px"
                 tooltipEl.style.top =
-                  position.top + window.pageYOffset + tooltipModel.caretY + "px"
+                  position.top + window.scrollY + tooltipModel.caretY + "px"
                 tooltipEl.style.font =
                   bodyFont.family + ", " + bodyFont.size + "px"
                 tooltipEl.style.padding = "10px"

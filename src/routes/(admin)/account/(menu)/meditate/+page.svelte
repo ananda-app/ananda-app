@@ -5,6 +5,7 @@
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
   import type { RealtimeChannel } from "@supabase/supabase-js"
+  import { formatTechnique } from "$lib/formatUtils"
 
   let adminSection: Writable<string> = getContext("adminSection")
   adminSection.set("meditate")
@@ -186,9 +187,13 @@
               class="select select-bordered w-full"
               required
             >
-              <option value="loving_kindness">Loving Kindness</option>
-              <option value="breath_focus">Breath Focus</option>
-              <option value="body_scan">Body Scan</option>
+              <option value="loving_kindness"
+                >{formatTechnique("loving_kindness")}</option
+              >
+              <option value="breath_focus"
+                >{formatTechnique("breath_focus")}</option
+              >
+              <option value="body_scan">{formatTechnique("body_scan")}</option>
             </select>
           </div>
 
