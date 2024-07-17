@@ -1,24 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import Chart from "chart.js/auto"
+  import { Chart, LinearScale } from "chart.js"
+  import type { TooltipModel, ChartType } from "chart.js"
   import annotationPlugin from "chartjs-plugin-annotation"
-  import { LinearScale } from "chart.js"
   import "chartjs-adapter-date-fns"
 
   Chart.register(LinearScale, annotationPlugin)
-
-  function smoothData(data: any[], windowSize: number) {
-    return data.map((point, index, array) => {
-      const start = Math.max(0, index - windowSize + 1)
-      const end = index + 1
-      const window = array.slice(start, end)
-      const sum = window.reduce((acc, curr) => acc + curr.y, 0)
-      return {
-        x: point.x,
-        y: sum / window.length,
-      }
-    })
-  }
 
   export let biometrics: Array<{
     ts: string
@@ -35,6 +22,19 @@
   let chartCanvasBPM: HTMLCanvasElement
   let chartCanvasBRPM: HTMLCanvasElement
   let chartCanvasMovement: HTMLCanvasElement
+
+  function smoothData(data: any[], windowSize: number) {
+    return data.map((point, index, array) => {
+      const start = Math.max(0, index - windowSize + 1)
+      const end = index + 1
+      const window = array.slice(start, end)
+      const sum = window.reduce((acc, curr) => acc + curr.y, 0)
+      return {
+        x: point.x,
+        y: sum / window.length,
+      }
+    })
+  }
 
   function createChart(
     canvas: HTMLCanvasElement,
@@ -58,7 +58,7 @@
               backgroundColor: "transparent",
               pointRadius: 2,
               borderWidth: 1,
-              order: 2,
+              order: 3,
             },
             {
               label: `${label} (Smoothed)`,
@@ -68,7 +68,7 @@
               borderWidth: 2,
               tension: 0.4,
               pointRadius: 0,
-              order: 1,
+              order: 2,
             },
           ],
         },
@@ -95,35 +95,118 @@
               display: true,
             },
             tooltip: {
-              mode: "index",
-              intersect: false,
-              callbacks: {
-                title: (context) =>
-                  `Elapsed Time: ${context[0].parsed.x.toFixed(2)} minutes`,
-                afterBody: (context) => {
-                  const elapsedMinutes = context[0].parsed.x
+              enabled: false,
+              external: function (context) {
+                let tooltipEl = document.getElementById("chartjs-tooltip")
+
+                if (!tooltipEl) {
+                  tooltipEl = document.createElement("div")
+                  tooltipEl.id = "chartjs-tooltip"
+                  tooltipEl.innerHTML = "<table></table>"
+                  document.body.appendChild(tooltipEl)
+                }
+
+                const tooltipModel = context.tooltip as TooltipModel<ChartType>
+                if (tooltipModel.opacity === 0) {
+                  tooltipEl.style.opacity = "0"
+                  return
+                }
+
+                tooltipEl.classList.remove("above", "below", "no-transform")
+                if (tooltipModel.yAlign) {
+                  tooltipEl.classList.add(tooltipModel.yAlign)
+                } else {
+                  tooltipEl.classList.add("no-transform")
+                }
+
+                function getBody(bodyItem: any) {
+                  return bodyItem.lines
+                }
+
+                if (tooltipModel.body) {
+                  const titleLines = tooltipModel.title || []
+                  const bodyLines = tooltipModel.body.map(getBody)
+
+                  let innerHtml = "<thead>"
+
+                  titleLines.forEach(function (title) {
+                    innerHtml += "<tr><th>" + title + "</th></tr>"
+                  })
+                  innerHtml += "</thead><tbody>"
+
+                  bodyLines.forEach(function (body, i) {
+                    const colors = tooltipModel.labelColors[i]
+                    let style = "background:" + colors.backgroundColor
+                    style += "; border-color:" + colors.borderColor
+                    style += "; border-width: 2px"
+                    const span =
+                      '<span style="' + style + '">' + body + "</span>"
+                    innerHtml += "<tr><td>" + span + "</td></tr>"
+                  })
+
                   const instruction = annotationData.find(
-                    (i) => Math.abs(i.elapsedMinutes - elapsedMinutes) < 0.1, // Adjust tolerance as needed
+                    (i) =>
+                      Math.abs(
+                        i.elapsedMinutes - tooltipModel.dataPoints[0].parsed.x,
+                      ) < 0.1,
                   )
-                  return instruction
-                    ? `Instruction: ${instruction.instruction}`
-                    : ""
-                },
+                  if (instruction) {
+                    innerHtml +=
+                      "<tr><td>Instruction: " +
+                      instruction.instruction +
+                      "</td></tr>"
+                  }
+
+                  innerHtml += "</tbody>"
+
+                  let tableRoot = tooltipEl.querySelector("table")
+                  tableRoot!.innerHTML = innerHtml
+                }
+
+                const position = context.chart.canvas.getBoundingClientRect()
+                const bodyFont = Chart.defaults.font
+
+                tooltipEl.style.opacity = "1"
+                tooltipEl.style.position = "absolute"
+                tooltipEl.style.left =
+                  position.left +
+                  window.pageXOffset +
+                  tooltipModel.caretX +
+                  "px"
+                tooltipEl.style.top =
+                  position.top + window.pageYOffset + tooltipModel.caretY + "px"
+                tooltipEl.style.font =
+                  bodyFont.family + ", " + bodyFont.size + "px"
+                tooltipEl.style.padding = "10px"
+                tooltipEl.style.pointerEvents = "none"
+                tooltipEl.style.maxWidth = "300px"
+                tooltipEl.style.whiteSpace = "normal"
               },
             },
             annotation: {
-              annotations: annotationData.map((instr) => ({
-                type: "line",
-                xMin: instr.elapsedMinutes,
-                xMax: instr.elapsedMinutes,
-                borderColor: "rgba(255, 0, 0, 0.5)",
-                borderWidth: 2,
-                label: {
-                  content: instr.instruction,
-                  enabled: true,
-                  position: "center",
-                },
-              })),
+              annotations: annotationData.map((instr) => {
+                const closestDataPoint = smoothedData.reduce((prev, curr) =>
+                  Math.abs(curr.x - instr.elapsedMinutes) <
+                  Math.abs(prev.x - instr.elapsedMinutes)
+                    ? curr
+                    : prev,
+                )
+                return {
+                  type: "point",
+                  xValue: instr.elapsedMinutes,
+                  yValue: closestDataPoint.y,
+                  backgroundColor: "rgba(255, 0, 0, 1)",
+                  borderColor: "white",
+                  borderWidth: 2,
+                  radius: 8,
+                  hitRadius: 12,
+                  hoverRadius: 10,
+                  hoverBorderWidth: 3,
+                  label: {
+                    enabled: false,
+                  },
+                }
+              }),
             },
           },
         },
@@ -146,7 +229,7 @@
     const endTime = new Date(biometrics[biometrics.length - 1].ts).getTime()
     const sessionDurationMinutes = (endTime - startTime) / (1000 * 60) // Duration in minutes
 
-    const windowSize = 5
+    const windowSize = 5 // Adjust this value to change the smoothing level
 
     // Process BPM data
     const bpmData = biometrics.map((b) => ({
@@ -211,3 +294,22 @@
   ></canvas>
   <canvas bind:this={chartCanvasMovement} style="height:30vh;"></canvas>
 </div>
+
+<style>
+  :global(#chartjs-tooltip) {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 3px;
+    font-size: 14px;
+    max-width: 300px;
+    word-wrap: break-word;
+  }
+
+  :global(#chartjs-tooltip table) {
+    margin: 0;
+  }
+
+  :global(#chartjs-tooltip td) {
+    padding: 2px 4px;
+  }
+</style>
