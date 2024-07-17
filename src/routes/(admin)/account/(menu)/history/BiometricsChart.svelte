@@ -2,13 +2,35 @@
   import { onMount } from "svelte"
   import Chart from "chart.js/auto"
   import annotationPlugin from "chartjs-plugin-annotation"
-  import { TimeScale } from "chart.js"
+  import { LinearScale } from "chart.js"
   import "chartjs-adapter-date-fns"
 
-  Chart.register(TimeScale, annotationPlugin)
+  Chart.register(LinearScale, annotationPlugin)
 
-  export let biometrics: any[]
-  export let instructions: any[]
+  function smoothData(data: any[], windowSize: number) {
+    return data.map((point, index, array) => {
+      const start = Math.max(0, index - windowSize + 1)
+      const end = index + 1
+      const window = array.slice(start, end)
+      const sum = window.reduce((acc, curr) => acc + curr.y, 0)
+      return {
+        x: point.x,
+        y: sum / window.length,
+      }
+    })
+  }
+
+  export let biometrics: Array<{
+    ts: string
+    bpm: number
+    brpm: number
+    movement: number
+  }>
+  export let instructions: Array<{
+    id: number
+    ts: string
+    instruction: string
+  }>
 
   let chartCanvasBPM: HTMLCanvasElement
   let chartCanvasBRPM: HTMLCanvasElement
@@ -19,6 +41,8 @@
     label: string,
     color: string,
     data: any[],
+    sessionDurationMinutes: number,
+    annotationData: any[],
   ) {
     const ctx = canvas.getContext("2d")
     if (ctx) {
@@ -38,9 +62,15 @@
           responsive: true,
           scales: {
             x: {
-              type: "time",
-              time: { unit: "second" },
-              title: { display: true, text: "Time" },
+              type: "linear",
+              title: { display: true, text: "Elapsed Time (minutes)" },
+              min: 0,
+              max: sessionDurationMinutes,
+              ticks: {
+                callback: function (value, index, values) {
+                  return Math.round(value as number)
+                },
+              },
             },
             y: {
               title: { display: true, text: label },
@@ -49,10 +79,12 @@
           plugins: {
             tooltip: {
               callbacks: {
+                title: (context) =>
+                  `Elapsed Time: ${context[0].parsed.x.toFixed(2)} minutes`,
                 afterBody: (context) => {
-                  const time = context[0].parsed.x
-                  const instruction = instructions.find(
-                    (i) => Math.abs(new Date(i.ts).getTime() - time) < 1000,
+                  const elapsedMinutes = context[0].parsed.x
+                  const instruction = annotationData.find(
+                    (i) => Math.abs(i.elapsedMinutes - elapsedMinutes) < 0.1, // Adjust tolerance as needed
                   )
                   return instruction
                     ? `Instruction: ${instruction.instruction}`
@@ -61,10 +93,10 @@
               },
             },
             annotation: {
-              annotations: instructions.map((instr) => ({
+              annotations: annotationData.map((instr) => ({
                 type: "line",
-                xMin: new Date(instr.ts).getTime(),
-                xMax: new Date(instr.ts).getTime(),
+                xMin: instr.elapsedMinutes,
+                xMax: instr.elapsedMinutes,
                 borderColor: "rgba(255, 0, 0, 0.5)",
                 borderWidth: 2,
                 label: {
@@ -81,23 +113,59 @@
   }
 
   onMount(() => {
+    // Ensure biometrics are sorted by timestamp
+    biometrics.sort(
+      (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
+    )
+
+    // Ensure instructions are sorted by timestamp
+    instructions.sort(
+      (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
+    )
+
+    const startTime = new Date(biometrics[0].ts).getTime()
+    const endTime = new Date(biometrics[biometrics.length - 1].ts).getTime()
+    const sessionDurationMinutes = (endTime - startTime) / (1000 * 60) // Duration in minutes
+
+    const processedBiometrics = biometrics.map((b) => ({
+      x: (new Date(b.ts).getTime() - startTime) / (1000 * 60), // Convert to minutes
+      y: b.bpm,
+    }))
+
+    const processedInstructions = instructions.map((instr) => ({
+      ...instr,
+      elapsedMinutes: (new Date(instr.ts).getTime() - startTime) / (1000 * 60), // Convert to minutes
+    }))
+
     createChart(
       chartCanvasBPM,
       "BPM",
       "rgba(255, 99, 132, 1)",
-      biometrics.map((b) => ({ x: new Date(b.ts), y: b.bpm })),
+      processedBiometrics,
+      sessionDurationMinutes,
+      processedInstructions,
     )
     createChart(
       chartCanvasBRPM,
       "BRPM",
       "rgba(54, 162, 235, 1)",
-      biometrics.map((b) => ({ x: new Date(b.ts), y: b.brpm })),
+      biometrics.map((b) => ({
+        x: (new Date(b.ts).getTime() - startTime) / (1000 * 60), // Convert to minutes
+        y: b.brpm,
+      })),
+      sessionDurationMinutes,
+      processedInstructions,
     )
     createChart(
       chartCanvasMovement,
       "Movement",
       "rgba(75, 192, 192, 1)",
-      biometrics.map((b) => ({ x: new Date(b.ts), y: b.movement })),
+      biometrics.map((b) => ({
+        x: (new Date(b.ts).getTime() - startTime) / (1000 * 60), // Convert to minutes
+        y: b.movement,
+      })),
+      sessionDurationMinutes,
+      processedInstructions,
     )
   })
 </script>

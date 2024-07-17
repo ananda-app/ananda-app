@@ -47,7 +47,7 @@
         *,
         meditation_instructions!meditation_id (id, ts, instruction),
         biometrics!meditation_id (ts, bpm, brpm, movement)
-      `,
+        `,
       )
       .order("id", { ascending: false })
       .limit(pageSize)
@@ -99,13 +99,13 @@
           </h2>
           <p>Start: {new Date(session.start_ts).toLocaleString()}</p>
           <p>End: {new Date(session.end_ts).toLocaleString()}</p>
+          <p class="italic">""{session.comments}""</p>
           <div class="my-4">
             <BiometricsChart
               biometrics={session.biometrics}
               instructions={session.meditation_instructions}
             />
           </div>
-          <p class="italic">""{session.comments}""</p>
         </div>
       </div>
     {/each}
