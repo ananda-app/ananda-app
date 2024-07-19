@@ -40,6 +40,7 @@ export class AutoGPT {
   private secondsLeftInSession: number = 0;
   private secondsSinceLastInstruction: number = 0;
   private sessionDuration: number;
+  private instructions: Array<{ elapsedSeconds: number; content: string }> = [];
 
   constructor(
     meditationId: number,
@@ -92,77 +93,79 @@ export class AutoGPT {
   
   private constructPrompt(): string {
     const basePrompt = `
-  As an meditation guru, your task is to conduct a ${this.technique} meditation session using the biometric stats to track the progress. 
-  Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
-  The session will last ${(this.sessionDuration / 60).toFixed(0)} minutes. Keep track of the time left and plan each stage accordingly.
-  Think step by step. Base your decisions on the biometric stats and previous steps. Continiously monitor biometrics throughout the session.
-  The biometrics stats are estimated from the live video feed using rPPG algorithm. They may indicate the mental/physical state of the user.
-  Go into monitoring mode after each instruction. Provide the next instruction only when seconds since last instruction is 60 or more.
-  Keep the instructions brief. Encourage and reassure the user whenever possible. Do NOT repeat the same instruction. Mix it up. Be creative. 
-  When all stages are complete, use the "${FINISH_NAME}" command to exit. 
-  
-  User Comments: 
-  ${this.comments}
+As a meditation guru, your task is to conduct a ${this.technique} meditation session using the biometric stats to track the progress. 
+Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
+The session will last ${(this.sessionDuration / 60).toFixed(0)} minutes. Keep track of the time left and plan each stage accordingly.
+Think step by step. Base your decisions on the biometric stats and last command result. Continiously monitor biometrics throughout the session.
+The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
+Provide the next instruction only when seconds since last instruction is 60 or more. Keep checking biometrics while waiting.
+Keep the instructions brief. Encourage and reassure the user whenever possible. 
+Do NOT repeat the same instruction. Refer to the past instructions section to check. Mix it up. Be creative. 
+When all stages are complete, use the "${FINISH_NAME}" command to exit. 
 
-  Grouding Stage Instructions:
-  - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
-  - Ask the user to set an intention to sit still.
-  - Start monitoring the biometrics. 
-  - Move to the next stage when biometrics settle down.
+User Comments: 
+${this.comments}
 
-  Immersion Stage Instructions:
-  - Start by providing instructions for ${this.technique} meditation technique.
-  - Changes to the stats may indicate the user has lost focus. 
-  - Keep monitoring if the biometrics remain stable. Interrupt only if they change.
-  - Move to the next stage ONLY when seconds left in session is less than 60.
+Grouding Stage Instructions:
+- Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
+- Ask the user to set an intention to sit still.
+- Start monitoring the biometrics. 
+- Move to the next stage when biometrics settle down.
 
-  Clousure Stage Instructions:
-  - Provide intructions to reflect on the session and current mental state.
-  - Ask user to rub the hands together, place the palms on the eyes and open it.
-  - Ask the user to try and keep practicing it for the rest of the day. 
-  - End this stage with a goodbye.
+Immersion Stage Instructions:
+- Start by providing instructions for ${this.technique} meditation technique.
+- Changes to the stats may indicate the user has lost focus. 
+- Keep monitoring if the biometrics remain stable. Interrupt only if they change.
+- Move to the next stage ONLY when seconds left in session is less than 60.
+
+Clousure Stage Instructions:
+- Provide intructions to reflect on the session and current mental state.
+- Ask user to rub the hands together, place the palms on the eyes and open it.
+- Ask the user to try and keep practicing it for the rest of the day. 
+- End this stage with a goodbye.
+
+Constraints:
+1. If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.
+2. No user assistance
+3. Exclusively use the commands listed in double quotes e.g. "command name"
+
+Commands:
+${this.tools.map((tool, i) => `${i + 1}. ${this.generateCommandString(tool)}`).join('\n')}
+${this.tools.length + 1}. "${FINISH_NAME}": use this to signal that you have completed the meditation session"
   
-  Constraints:
-  1. If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.
-  2. No user assistance
-  3. Exclusively use the commands listed in double quotes e.g. "command name"
-  
-  Commands:
-  ${this.tools.map((tool, i) => `${i + 1}. ${this.generateCommandString(tool)}`).join('\n')}
-  ${this.tools.length + 1}. "${FINISH_NAME}": use this to signal that you have completed the meditation session"
-    
-  Performance Evaluation:
-  1. Continuously review and analyze your actions, biometrics and time stats to ensure you are performing to the best of your abilities.
-  2. Constructively self-criticize your big-picture behavior constantly.
-  3. Reflect on past decisions and strategies to refine your approach.
-  
-  You should only respond in JSON format as described below:
-  
-  Response Format:
-  {
-    "thoughts": {
-      "meditation_id": ${this.meditationId},
-      "stage": "meditation stage",
-      "text": "thought",
-      "biometrics": "analysis of the biometric stats",
-      "reasoning": "reasoning",
-      "plan": ["short list", "that conveys", "long-term plan"],
-      "criticism": "constructive self-criticism of the plan",
-      "time_stats": {
-        "elapsed_seconds": "elapsed seconds",
-        "seconds_left_in_session": "seconds left in session",
-        "seconds_since_last_instruction": "seconds since last instruction",
-      }
-    },
-    "command": {
-      "name": "command name",
-      "args": {
-        "arg name": "value"
-      }
+Performance Evaluation:
+1. Continuously review and analyze your plan, biometrics and time stats to ensure you are performing to the best of your abilities.
+2. Constructively self-criticize your big-picture behavior constantly.
+3. Reflect on past decisions and strategies to refine your approach.
+
+You should only respond in JSON format as described below:
+
+Response Format:
+{
+  "thoughts": {
+    "meditation_id": ${this.meditationId},
+    "stage": "stage of meditation",
+    "text": "thought",
+    "biometrics": "analysis of the biometric stats",
+    "mental_state": "assessment of user's mental state",
+    "reasoning": "reasoning",
+    "plan": ["short list", "that conveys", "long-term plan"],
+    "criticism": "constructive self-criticism of the plan",
+    "time_stats": {
+      "elapsed_seconds": "elapsed seconds",
+      "seconds_left_in_session": "seconds left in session",
+      "seconds_since_last_instruction": "seconds since last instruction",
+    }
+  },
+  "command": {
+    "name": "command name",
+    "args": {
+      "arg name": "value"
     }
   }
-  
-  Ensure the response can be parsed by JSON.parse()`;
+}
+
+Ensure the response can be parsed by JSON.parse()`;
   
     return basePrompt;
   }
@@ -174,56 +177,52 @@ export class AutoGPT {
 
   private async formatMessages(userInput: string): Promise<BaseMessage[]> {
     const basePrompt = new SystemMessage(this.constructPrompt());
-    const timePrompt = new SystemMessage(
-      `The current time and date is ${new Date().toLocaleString()}`
-    );
+    let usedTokens = await this.countTokens(basePrompt.content as string);
   
-    const usedTokens =
-      await this.countTokens(basePrompt.content as string) +
-      await this.countTokens(timePrompt.content as string);
-  
-    const relevantDocs = await this.memory.getRelevantDocuments(
-      JSON.stringify(this.fullMessageHistory.slice(-10))
-    );
-    
-    const relevantMemory = relevantDocs.map(d => d.pageContent);
-    let relevantMemoryTokens = await relevantMemory.reduce(
-      async (acc: Promise<number>, doc: string) => (await acc) + await this.countTokens(doc),
-      Promise.resolve(0)
-    );
-  
-    while (usedTokens + relevantMemoryTokens > 50000) {
-      relevantMemory.pop();
-      relevantMemoryTokens = await relevantMemory.reduce(
-        async (acc: Promise<number>, doc: string) => (await acc) + await this.countTokens(doc),
-        Promise.resolve(0)
-      );
+    // Add the last command result
+    const lastSystemMessage = this.fullMessageHistory.findLast(message => message instanceof SystemMessage);
+    let lastResultMessage: SystemMessage | null = null;
+    if (lastSystemMessage) {
+      const lastResultContent = "Last command result:\n" + lastSystemMessage.content;
+      lastResultMessage = new SystemMessage(lastResultContent);
+      usedTokens += await this.countTokens(lastResultContent);
     }
   
-    const contentFormat = `This reminds you of these events from your past:\n${relevantMemory.join("\n")}\n\n`;
-    const memoryMessage = new SystemMessage(contentFormat);
+    // Prepare past instructions
+    let pastInstructions = this.instructions
+      .map(instruction => `- ${instruction.elapsedSeconds}s: ${instruction.content}`);
   
-    const usedTokensWithMemory =
-      usedTokens + await this.countTokens(memoryMessage.content as string);
+    // Calculate tokens for each instruction
+    const instructionTokens = await Promise.all(pastInstructions.map(instr => this.countTokens(instr)));
   
-    const historicalMessages: BaseMessage[] = [];
-    for (const message of this.fullMessageHistory.slice(-10).reverse()) {
-      const messageTokens = await this.countTokens(message.content as string);
-      if (usedTokensWithMemory + messageTokens > this.sendTokenLimit - 1000) {
-        break;
-      }
-      historicalMessages.unshift(message);
+    // Trim past instructions from the beginning if needed
+    let systemContextContent = "Past instructions:\n";
+    let totalInstructionTokens = instructionTokens.reduce((a, b) => a + b, 0);
+    let i = 0;
+    while (i < pastInstructions.length && 
+           usedTokens + totalInstructionTokens + await this.countTokens(systemContextContent) > this.sendTokenLimit - 2000) {
+      totalInstructionTokens -= instructionTokens[i];
+      i++;
     }
+  
+    systemContextContent += pastInstructions.slice(i).join('\n');
+    usedTokens += totalInstructionTokens + await this.countTokens(systemContextContent);
+  
+    const systemContext = new SystemMessage(systemContextContent);
   
     const inputMessage = new HumanMessage(userInput);
-    
-    return [
-      basePrompt,
-      timePrompt,
-      memoryMessage,
-      ...historicalMessages,
-      inputMessage,
-    ];
+    usedTokens += await this.countTokens(inputMessage.content as string);
+  
+    const messages: BaseMessage[] = [basePrompt, systemContext];
+    if (lastResultMessage) messages.push(lastResultMessage);
+    messages.push(inputMessage);
+
+    // console.log("###")
+    // console.log("Full prompt:", messages.map(m => m.content).join('\n\n'));
+    // console.log(`Total tokens used: ${usedTokens}`);
+    // console.log("###")
+  
+    return messages;
   }
 
   async run(): Promise<string | undefined> {
@@ -242,10 +241,12 @@ export class AutoGPT {
       this.secondsLeftInSession = Math.max(0, this.sessionDuration - this.elapsedSeconds);
       this.secondsSinceLastInstruction = Math.floor((currentTime - lastInstructionTime) / 1000);
 
-      const timeStats = `Time Stats:
-      - elapsed_seconds: ${this.elapsedSeconds}
-      - seconds_left_in_session: ${this.secondsLeftInSession}
-      - seconds_since_last_instruction: ${this.secondsSinceLastInstruction}`;
+      const timeStats = [
+        "Time Stats:",
+        `- elapsed_seconds: ${this.elapsedSeconds}`,
+        `- seconds_left_in_session: ${this.secondsLeftInSession}`,
+        `- seconds_since_last_instruction: ${this.secondsSinceLastInstruction}`
+      ].join('\n');
 
       let userInput;
       if (this.secondsSinceLastInstruction < 60) {
@@ -285,6 +286,10 @@ export class AutoGPT {
 
           if (tool.name.toLowerCase().includes("instruction")) {
             lastInstructionTime = currentTime;
+            this.instructions.push({
+              elapsedSeconds: this.elapsedSeconds,
+              content: action.args.input
+            });
           }          
         } catch (e) {
           result = `Error in args: ${e}`;

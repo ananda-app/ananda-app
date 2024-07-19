@@ -73,20 +73,20 @@ export const actions: Actions = {
 
       const getBiometricStats = new DynamicTool({
         name: "get_biometric_stats",
-        description: `Get the biometric stats of the user for the last 30 seconds in CSV format. 
-                      The stats returned are elapsed seconds, heart beats per minute (bpm),  
-                      breaths per minute (brpm), movement score (0 is absolutely still).`,
+        description: "Get the biometric stats of the user for the last 30 seconds in CSV format. " +
+                     "The stats returned are elapsed seconds, heart beats per minute (bpm), " +
+                     "breaths per minute (brpm), movement score (0 is absolutely still).",
         func: async () => {
           const { data, error } = await supabase
             .from('biometrics')
             .select('ts, bpm, brpm, movement, elapsed_seconds')
             .eq('meditation_id', meditationId)
-            .order('ts', { ascending: false })
+            .order('ts', { ascending: true })
             .limit(15);
           
           if (error) throw error;
           console.log(`Meditation ID ${meditationId}: Fetching biometrics data`);
-          const csvData = ['elapsed_seconds,bpm,brpm,movement,elapsed_seconds', 
+          const csvData = ['elapsed_seconds,bpm,brpm,movement', 
             ...data.map(row => `${row.elapsed_seconds},${row.bpm},${row.brpm},${row.movement}`)
           ].join('\n');
           return '\n' + csvData;

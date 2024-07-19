@@ -212,6 +212,10 @@
   }
 
   onMount(() => {
+    if (biometrics.length == 0) {
+      return
+    }
+
     // Ensure biometrics are sorted by timestamp
     biometrics.sort(
       (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
