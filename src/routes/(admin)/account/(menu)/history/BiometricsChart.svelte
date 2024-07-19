@@ -1,11 +1,27 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { Chart, LinearScale } from "chart.js"
+  import {
+    Chart,
+    LinearScale,
+    LineElement,
+    PointElement,
+    LineController,
+    TimeScale,
+    Tooltip,
+  } from "chart.js"
   import type { TooltipModel, ChartType } from "chart.js"
   import annotationPlugin from "chartjs-plugin-annotation"
   import "chartjs-adapter-date-fns"
 
-  Chart.register(LinearScale, annotationPlugin)
+  Chart.register(
+    LinearScale,
+    LineElement,
+    PointElement,
+    LineController,
+    TimeScale,
+    Tooltip,
+    annotationPlugin,
+  )
 
   export let biometrics: Array<{
     ts: string
@@ -212,6 +228,10 @@
   }
 
   onMount(() => {
+    if (biometrics.length == 0) {
+      return
+    }
+
     // Ensure biometrics are sorted by timestamp
     biometrics.sort(
       (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
