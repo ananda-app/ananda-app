@@ -349,6 +349,15 @@ export class Biometrics {
           movementHistory: this.movementHistory,
           callbackData: { timestamp: this.timestamps[this.timestamps.length - 1] }
         });
+      } else {
+        if (this.callback) {
+          this.callback({
+            heartRate: 0,
+            breathingRate: 0,
+            movement: this.lastMovementScore * 100,
+            timestamp: Date.now()
+          });
+        }
       }
     }
   
