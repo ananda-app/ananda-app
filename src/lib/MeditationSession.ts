@@ -30,14 +30,19 @@ export class MeditationSession extends EventEmitter {
   private messageHistory: InMemoryChatMessageHistory;
   private intervalId: NodeJS.Timeout | null = null;
   private technique: string;
-  private comments: string;
   private durationSeconds: number;
   private maxTokens: number = 100000; 
   private encoding: any = null;
   private startTime: number;
   private parser: JsonOutputParser<MeditationResponse>;
+  private withMessageHistory: RunnableWithMessageHistory<{
+    input: string;
+    biometrics: string;
+    timeLeft: number;
+    chat_history: BaseMessage[];
+  }, AIMessage>;
 
-  constructor(meditationId: number, supabase: SupabaseClient, technique: string, comments: string, durationMinutes: number) {
+  constructor(meditationId: number, supabase: SupabaseClient, technique: string, durationMinutes: number) {
     super();
 
     this.meditationId = meditationId;
@@ -45,25 +50,11 @@ export class MeditationSession extends EventEmitter {
     this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY, verbose: true });
     this.messageHistory = new InMemoryChatMessageHistory();
     this.technique = technique;
-    this.comments = comments;
     this.durationSeconds = durationMinutes * 60;
     this.startTime = Date.now();
     this.initializeEncoding();
     this.parser = new JsonOutputParser<MeditationResponse>();
-  }
-
-  private async initializeEncoding() {
-    this.encoding = await encodingForModel("gpt-4");
-  }
-
-  private async countTokens(text: string): Promise<number> {
-    if (!this.encoding) {
-      await this.initializeEncoding();
-    }
-    return this.encoding!.encode(text).length;
-  }
-
-  async start() {
+    
     const systemPrompt = `
 As a meditation guru, your task is to conduct a ${this.technique} meditation session based on the biometric stats of the user. 
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
@@ -71,9 +62,6 @@ Think step by step. Base your decisions on the biometric stats and your assessme
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
 Keep the instructions brief. Encourage and reassure the user whenever possible. 
 Do NOT repeat the same instruction. Mix it up. Be creative. 
-
-User Comments: 
-${this.comments}
 
 Grounding Stage Instructions:
 - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
@@ -106,64 +94,60 @@ ALWAYS respond in JSON format as described below:
   }}
 }}
 
-Ensure the response can be parsed by JSON.parse()`;
+Ensure the response can be parsed by JSON.parse()
+    `;
 
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", systemPrompt],
+      ["placeholder", "{chat_history}"],
       ["human", [
-        "Here are the latest biometrics:\n{biometrics}",
-        "Time left in session: {timeLeft} seconds",
-        "Respond as per the format specified: "
-      ].join('\n')],
+        "Here are the biometrics for the last minute:", 
+        "{biometrics}", "", 
+        "Time left in session: {timeLeft} seconds.", 
+        "Respond as per the JSON format specified: "
+      ].join("\n")],
     ]);
 
-    const filterMessages = ({ chat_history }: { chat_history: BaseMessage[] }) => {
-      return this.truncateMessageHistory(chat_history);
+    const filterMessages = ({ chat_history }: { chat_history: BaseMessage[] }): BaseMessage[] => {
+      return chat_history.slice(-10);
     };
 
-    const chain = RunnableSequence.from([
+    const chain = RunnableSequence.from<{
+      input: string;
+      biometrics: string;
+      timeLeft: number;
+      chat_history: BaseMessage[];
+    }, AIMessage>([
       RunnablePassthrough.assign({
-        chat_history: (input: Record<string, unknown>) => filterMessages(input as { chat_history: BaseMessage[] }),
+        chat_history: (input: { chat_history: BaseMessage[] }) => 
+          filterMessages({ chat_history: input.chat_history }),
       }),
       prompt,
       this.llm
     ]);
 
-    const withMessageHistory = new RunnableWithMessageHistory({
+    this.withMessageHistory = new RunnableWithMessageHistory({
       runnable: chain,
-      getMessageHistory: async () => this.messageHistory,
-      inputMessagesKey: "biometrics",
+      getMessageHistory: async (sessionId) => this.messageHistory,
+      inputMessagesKey: "input",
       historyMessagesKey: "chat_history",
     });
+  }
 
-    const runLLM = async () => {
-      const timeLeft = this.durationSeconds - Math.floor((Date.now() - this.startTime) / 1000);
-      
-      const biometrics = await this.getBiometricStats();
-      
-      const response = await withMessageHistory.invoke(
-        { biometrics, timeLeft: timeLeft.toString() },
-        { configurable: { sessionId: this.meditationId.toString() } }
-      );
+  private async initializeEncoding() {
+    this.encoding = await encodingForModel("gpt-4");
+  }
 
-      await this.messageHistory.addMessages([
-        new HumanMessage(biometrics + "\nTime left in session: " + timeLeft + " seconds"),
-        new AIMessage(JSON.stringify(response))
-      ]);      
+  private async countTokens(text: string): Promise<number> {
+    if (!this.encoding) {
+      await this.initializeEncoding();
+    }
+    return this.encoding!.encode(text).length;
+  }
 
-      const content = (response as any).content;
-      console.log("LLM Response:", content);
-      const parsedResponse = this.parseResponse(Array.isArray(content) ? content[0].content : content);
-      await this.provideNextInstruction(parsedResponse.thoughts.instruction);
-
-      if (parsedResponse.thoughts.exit) {
-        this.stop();
-      }
-    };
-
-    await runLLM();
-
-    this.intervalId = setInterval(runLLM, 60000); // Run every 1 minute
+  async start() {
+    await this.runLLM();
+    this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
   }
 
   stop() {
@@ -172,37 +156,6 @@ Ensure the response can be parsed by JSON.parse()`;
       this.intervalId = null;
     }
     this.emit('done');
-  }
-
-  private async truncateMessageHistory(messages: BaseMessage[]): Promise<BaseMessage[]> {
-    let totalTokens = 0;
-    const truncatedMessages: BaseMessage[] = [];
-
-    // Count tokens from the end of the conversation
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      const messageContent = Array.isArray(message.content) ? message.content.join(' ') : message.content;
-      const messageTokens = await this.countTokens(messageContent);
-      
-      if (totalTokens + messageTokens > this.maxTokens) {
-        break;
-      }
-
-      totalTokens += messageTokens;
-      truncatedMessages.unshift(message);
-    }
-
-    return truncatedMessages;
-  }
-
-  private parseResponse(content: string): MeditationResponse {
-    try {
-      const jsonString = content.replace(/^```json\n/, '').replace(/\n```$/, '');
-      return JSON.parse(jsonString);
-    } catch (error) {
-      console.error("Failed to parse LLM response:", error);
-      throw new Error("Invalid response format from LLM");
-    }
   }
 
   private async getBiometricStats(): Promise<string> {
@@ -243,6 +196,43 @@ Ensure the response can be parsed by JSON.parse()`;
       console.log(`[${elapsedSeconds}s] Saved instruction ${instructionId}: ${instruction}`);
     } else {
       console.log(`[${elapsedSeconds}s] Failed to retrieve instruction ID after insertion`);
+    }
+  }
+
+  private async runLLM() {
+    try {
+      const timeLeft = this.durationSeconds - Math.floor((Date.now() - this.startTime) / 1000);
+      
+      const biometrics = await this.getBiometricStats();
+      
+      const response = await this.withMessageHistory.invoke(
+        { 
+          input: [
+            "Here are the biometrics for the last minute:",
+            biometrics,
+            "",
+            `Time left in session: ${timeLeft} seconds.`,
+            "Respond as per the JSON format specified: "
+          ].join("\n"),
+          biometrics,
+          timeLeft,
+          chat_history: await this.messageHistory.getMessages() // Add this line
+        },
+        { configurable: { sessionId: this.meditationId.toString() } }
+      );
+
+      console.log("LLM Response:", response.content);
+
+      const responseContent = Array.isArray(response.content) ? response.content.join('') : response.content ?? '';
+      const parsedResponse = await this.parser.parse(responseContent);
+      await this.provideNextInstruction(parsedResponse.thoughts.instruction);
+
+      if (parsedResponse.thoughts.exit) {
+        this.stop();
+      }
+    } catch (error) {
+      console.error("Error in runLLM:", error);
+      this.emit('error', new Error("Failed to run LLM"));
     }
   }
 }

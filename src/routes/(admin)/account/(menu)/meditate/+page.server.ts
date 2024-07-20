@@ -69,7 +69,6 @@ export const actions: Actions = {
         meditationId,
         supabase,
         technique,
-        comments ?? '',
         durationMinutes
       );
 
