@@ -6,6 +6,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { OPENAI_API_KEY } from '$env/static/private';
 import type { BaseMessage } from "@langchain/core/messages";
 import { encodingForModel } from "@langchain/core/utils/tiktoken";
+import { JsonOutputParser } from "@langchain/core/output_parsers";
+import { EventEmitter } from 'events';
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 interface MeditationResponse {
   thoughts: {
@@ -20,7 +23,7 @@ interface MeditationResponse {
   }
 }
 
-export class MeditationSession {
+export class MeditationSession extends EventEmitter {
   private meditationId: number;
   private supabase: SupabaseClient;
   private llm: ChatOpenAI;
@@ -32,17 +35,21 @@ export class MeditationSession {
   private maxTokens: number = 100000; 
   private encoding: any = null;
   private startTime: number;
+  private parser: JsonOutputParser<MeditationResponse>;
 
   constructor(meditationId: number, supabase: SupabaseClient, technique: string, comments: string, durationMinutes: number) {
+    super();
+
     this.meditationId = meditationId;
     this.supabase = supabase;
-    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY });
+    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY, verbose: true });
     this.messageHistory = new InMemoryChatMessageHistory();
     this.technique = technique;
     this.comments = comments;
     this.durationSeconds = durationMinutes * 60;
     this.startTime = Date.now();
     this.initializeEncoding();
+    this.parser = new JsonOutputParser<MeditationResponse>();
   }
 
   private async initializeEncoding() {
@@ -63,7 +70,7 @@ Conduct the session in three stages: grounding, immersion and closure. Instructi
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
 Keep the instructions brief. Encourage and reassure the user whenever possible. 
-Do NOT repeat the same instruction. Refer to the past instructions section to check. Mix it up. Be creative. 
+Do NOT repeat the same instruction. Mix it up. Be creative. 
 
 User Comments: 
 ${this.comments}
@@ -86,9 +93,8 @@ Closure Stage Instructions:
 - End this stage with a goodbye and set the 'exit' flag go true.
 
 ALWAYS respond in JSON format as described below:
-Response Format:
-{
-  "thoughts": {
+{{
+  "thoughts": {{
     "stage": "stage of meditation",
     "biometrics": "analysis of the biometric stats",
     "mental_state": "assessment of user's mental state",
@@ -96,9 +102,11 @@ Response Format:
     "plan": ["short list", "that conveys", "long-term plan"],
     "criticism": "constructive self-criticism of the plan",
     "instruction": "instruction to provide to the user, if any",
-    "exit": "true if this is the last instruction of the session, false otherwise",
-  }
-}`;
+    "exit": "true if this is the last instruction of the session, false otherwise"
+  }}
+}}
+
+Ensure the response can be parsed by JSON.parse()`;
 
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", systemPrompt],
@@ -118,7 +126,7 @@ Response Format:
         chat_history: (input: Record<string, unknown>) => filterMessages(input as { chat_history: BaseMessage[] }),
       }),
       prompt,
-      this.llm,
+      this.llm
     ]);
 
     const withMessageHistory = new RunnableWithMessageHistory({
@@ -128,8 +136,8 @@ Response Format:
       historyMessagesKey: "chat_history",
     });
 
-    this.intervalId = setInterval(async () => {
-      const timeLeft = this.durationSeconds * 60 - Math.floor((Date.now() - this.startTime) / 1000);
+    const runLLM = async () => {
+      const timeLeft = this.durationSeconds - Math.floor((Date.now() - this.startTime) / 1000);
       
       const biometrics = await this.getBiometricStats();
       
@@ -138,14 +146,24 @@ Response Format:
         { configurable: { sessionId: this.meditationId.toString() } }
       );
 
+      await this.messageHistory.addMessages([
+        new HumanMessage(biometrics + "\nTime left in session: " + timeLeft + " seconds"),
+        new AIMessage(JSON.stringify(response))
+      ]);      
+
       const content = (response as any).content;
+      console.log("LLM Response:", content);
       const parsedResponse = this.parseResponse(Array.isArray(content) ? content[0].content : content);
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
 
       if (parsedResponse.thoughts.exit) {
         this.stop();
       }
-    }, 60000); // Run every 1 minute
+    };
+
+    await runLLM();
+
+    this.intervalId = setInterval(runLLM, 60000); // Run every 1 minute
   }
 
   stop() {
@@ -153,10 +171,7 @@ Response Format:
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    if (this.encoding) {
-      this.encoding.free();
-      this.encoding = null;
-    }
+    this.emit('done');
   }
 
   private async truncateMessageHistory(messages: BaseMessage[]): Promise<BaseMessage[]> {
@@ -182,7 +197,8 @@ Response Format:
 
   private parseResponse(content: string): MeditationResponse {
     try {
-      return JSON.parse(content);
+      const jsonString = content.replace(/^```json\n/, '').replace(/\n```$/, '');
+      return JSON.parse(jsonString);
     } catch (error) {
       console.error("Failed to parse LLM response:", error);
       throw new Error("Invalid response format from LLM");

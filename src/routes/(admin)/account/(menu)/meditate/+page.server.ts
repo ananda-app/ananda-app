@@ -73,29 +73,24 @@ export const actions: Actions = {
         durationMinutes
       );
 
+      meditationSession.start();
+
       activeMeditations.update(meditations => ({
         ...meditations,
         [meditationId]: meditationSession
       }));      
 
-      // Start the meditation session
-      meditationSession.start().then(async () => {
-        console.log(`Meditation session completed for meditation ${meditationId}`);
-
+      meditationSession.once('done', async () => {
         const { error } = await supabase
           .from('meditation_sessions')
           .update({ end_ts: new Date() })
           .eq('id', meditationId)
           .eq('user_id', session.user.id);
-
-        if (error) throw error;
-
-        console.log(`Stopped meditation ${meditationId}`);
-
-      }).catch(error => {
-        console.error(`Meditation session error for meditation ${meditationId}:`, error);
-
-      }).finally(() => {
+      
+        if (error) console.error(`Error updating session end time: ${error.message}`);
+      
+        console.log(`Meditation session completed for meditation ${meditationId}`);
+      
         // Clean up the store
         activeMeditations.update(meditations => {
           const { [meditationId]: _, ...rest } = meditations;
