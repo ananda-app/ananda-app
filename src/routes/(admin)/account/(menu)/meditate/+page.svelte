@@ -58,6 +58,10 @@
 
   function subscribeToDbChanges() {
     try {
+      if (channel) {
+        channel.unsubscribe()
+      }
+
       channel = supabase
         .channel("schema-db-changes")
         .on(

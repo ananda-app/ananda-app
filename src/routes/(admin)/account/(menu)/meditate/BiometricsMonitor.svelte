@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from "svelte"
+  import { onMount, onDestroy } from "svelte"
   import { Biometrics } from "$lib/biometrics.js"
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
@@ -8,8 +8,6 @@
 
   export let supabase: SupabaseClient // Explicitly type supabase
   export let meditationId: string | null
-
-  const dispatch = createEventDispatcher()
 
   let heartRateChart: ChartType
   let breathingRateChart: ChartType
@@ -246,19 +244,15 @@
   }
 
   onMount(() => {
-    let cleanup: (() => void) | undefined
-    initializeApp()
-      .then((cleanupFn) => {
-        cleanup = cleanupFn
-      })
-      .catch((error) => {
-        console.error("Error initializing app:", error)
-      })
+    initializeApp().catch((error) => {
+      console.error("Error initializing app:", error)
+    })
+  })
 
-    return () => {
-      if (cleanup) {
-        cleanup()
-      }
+  onDestroy(() => {
+    if (biometricsMonitor) {
+      biometricsMonitor.stop()
+      biometricsMonitor = null
     }
   })
 </script>

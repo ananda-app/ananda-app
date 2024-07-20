@@ -14,6 +14,7 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 interface MeditationResponse {
   thoughts: {
+    id: string;
     stage: string;
     seconds_left: number;
     biometric_analysis: string;
@@ -67,7 +68,7 @@ export class MeditationSession extends EventEmitter {
     this.parser = new JsonOutputParser<MeditationResponse>();
     
     const systemPrompt = `
-As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. 
+As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${meditationId}.
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Zero values may indicate wrong posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
@@ -98,6 +99,7 @@ Closure Stage Instructions:
 ALWAYS respond in JSON format as described below:
 {{
   "thoughts": {{
+    "id": "id of this session",
     "stage": "stage of meditation",
     "seconds_left": "seconds left in session",
     "biometric_analysis": "analysis of the biometric stats",
@@ -261,9 +263,9 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
 
     if (data && data.length > 0 && 'id' in data[0]) {
       const instructionId = data[0].id;
-      console.log(`[${elapsedSeconds}s] Saved instruction ${instructionId}: ${instruction}`);
+      console.log(`[${elapsedSeconds}s] Saved instruction ${instructionId} for meditation ${this.meditationId}: ${instruction}`);
     } else {
-      console.log(`[${elapsedSeconds}s] Failed to retrieve instruction ID after insertion`);
+      console.log(`[${elapsedSeconds}s] Failed to retrieve instruction ID after insertion for meditation ${this.meditationId}`);
     }
   }
 
