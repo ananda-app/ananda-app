@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, AuthApiError, type Session } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
@@ -15,6 +15,7 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 interface MeditationResponse {
   thoughts: {
     stage: string;
+    seconds_left: string,
     biometrics: string;
     mental_state: string;
     reasoning: string;
@@ -43,21 +44,21 @@ export class MeditationSession extends EventEmitter {
     timeLeft: number;
     chat_history: BaseMessage[];
   }, AIMessage>;
+  private session: Session;
 
-  constructor(meditationId: number, technique: string, durationMinutes: number, accessToken: string) {
+  constructor(meditationId: number, technique: string, durationMinutes: number, session: Session) {
     super();
 
     this.meditationId = meditationId;
-    
-    this.supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      }
-    });
-    
-    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY });
+ 
+    // Validate the session
+    if (!session || !session.access_token) {
+      throw new Error("Invalid session");
+    }    
+    this.session = session;
+     
+    this.supabase = this.createSupabaseClient(session.access_token);
+    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 1.0, apiKey: OPENAI_API_KEY });
     this.messageHistory = new InMemoryChatMessageHistory();
     this.technique = technique;
     this.durationSeconds = durationMinutes * 60;
@@ -66,34 +67,37 @@ export class MeditationSession extends EventEmitter {
     this.parser = new JsonOutputParser<MeditationResponse>();
     
     const systemPrompt = `
-As a meditation guru, your task is to conduct a ${this.technique} meditation session based on the biometric stats of the user. 
+As a meditation guru, your task is to conduct a ${this.technique} meditation session using the biometric stats as a guide. 
+The session will last ${this.durationSeconds} seconds. Keep track of the time left and and plan each stage accordingly.
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
-Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
+Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 Keep the instructions brief. Encourage and reassure the user whenever possible. 
 Do NOT repeat the same instruction. Mix it up. Be creative. 
 
 Grounding Stage Instructions:
 - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
 - Ask the user to set an intention to sit still.
-- Move to the next stage when biometrics settle down.
+- Move to the next stage after 60 seconds has elapsed.
 
 Immersion Stage Instructions:
 - Start by providing instructions for ${this.technique} technique.
 - Monitor the stats and assess the mental state of the user.
-- If user has lost focus then provide the 6Rs return instruction. Skip otherwise.
-- Move to the next stage when time left in session is less than 60 seconds.
+- If user has lost focus then gently remind the user to re-focus. 
+- Move to the next stage ONLY when time left in session is less than 30 seconds.
 
 Closure Stage Instructions:
 - Provide instructions to reflect on the session and current mental state.
 - Ask user to rub the hands together, place the palms on the eyes and open it.
 - Ask the user to try and keep practicing it for the rest of the day. 
+- Summaize the biometrics observed during the session and provide feedback.
 - End this stage with a goodbye and set the 'exit' flag go true.
 
 ALWAYS respond in JSON format as described below:
 {{
   "thoughts": {{
     "stage": "stage of meditation",
+    "seconds_left": "seconds left in session",
     "biometrics": "analysis of the biometric stats",
     "mental_state": "assessment of user's mental state",
     "reasoning": "reasoning",
@@ -145,6 +149,45 @@ Ensure the response can be parsed by JSON.parse()
       historyMessagesKey: "chat_history",
     });
   }
+
+  private createSupabaseClient(accessToken: string) {
+    return createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  }
+
+  private async refreshSession() {
+    try {
+      const { data, error } = await this.supabase.auth.refreshSession(this.session);
+  
+      if (error) {
+        if (error instanceof AuthApiError && error.message.includes('Invalid Refresh Token')) {
+          console.log("Invalid refresh token. Attempting to use existing access token.");
+          return; // Continue with the existing token
+        }
+        throw error;
+      }
+  
+      if (data.session) {
+        this.session = data.session;
+        this.supabase = this.createSupabaseClient(this.session.access_token);
+        console.log("Session refreshed successfully");
+      } else {
+        throw new Error("No session data returned");
+      }
+    } catch (error) {
+      console.error("Failed to refresh session:", error);
+      throw error;
+    }
+  }  
 
   private async initializeEncoding() {
     this.encoding = await encodingForModel("gpt-4");
@@ -217,6 +260,13 @@ Ensure the response can be parsed by JSON.parse()
 
   private async runLLM() {
     try {
+      // Attempt to refresh the session
+      try {
+        await this.refreshSession();
+      } catch (refreshError) {
+        console.warn("Failed to refresh session. Continuing with existing token.", refreshError);
+      }
+
       const timeLeft = this.durationSeconds - Math.floor((Date.now() - this.startTime) / 1000);
       
       const biometrics = await this.getBiometricStats();

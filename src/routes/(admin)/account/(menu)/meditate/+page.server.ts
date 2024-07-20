@@ -69,7 +69,7 @@ export const actions: Actions = {
         meditationId,
         technique,
         durationMinutes,
-        session.access_token
+        session
       );
 
       meditationSession.start();
