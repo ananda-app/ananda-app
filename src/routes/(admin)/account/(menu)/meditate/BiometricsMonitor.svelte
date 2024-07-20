@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte"
+  import { onMount, createEventDispatcher } from "svelte"
   import { Biometrics } from "$lib/biometrics.js"
   import Chart from "chart.js/auto"
   import type { ChartConfiguration, Chart as ChartType } from "chart.js"
@@ -8,6 +8,8 @@
 
   export let supabase: SupabaseClient // Explicitly type supabase
   export let meditationId: string | null
+
+  const dispatch = createEventDispatcher()
 
   let heartRateChart: ChartType
   let breathingRateChart: ChartType

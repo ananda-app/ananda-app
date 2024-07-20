@@ -69,9 +69,9 @@ export class MeditationSession extends EventEmitter {
     const systemPrompt = `
 As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. 
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
-The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
+The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Zero values may indicate wrong posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
-Keep the instructions brief. Encourage and reassure the user whenever possible. 
+Keep the instructions brief. Encourage and reassure the user whenever possible. Consider the user comments, if any.
 Do NOT repeat the same instruction. Mix it up. Be creative. 
 
 User Comments:
@@ -86,6 +86,7 @@ Immersion Stage Instructions:
 - Monitor the stats and assess the mental state of the user.
 - If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
 - If the user seems to be focussed, do not provide any instruction.
+- Keep cycling through the instructions till the stage is over.
 
 Closure Stage Instructions:
 - Provide instructions to reflect on the session and current mental state.
@@ -108,11 +109,11 @@ ALWAYS respond in JSON format as described below:
   }}
 }}
 
-Ensure the response can be parsed by JSON.parse()
+Ensure the JSON is valid and can be parsed by JSON.parse()
 `;
 
     const prompt = ChatPromptTemplate.fromMessages([
-      ["system", systemPrompt],
+      ["system", systemPrompt.trim()],
       ["placeholder", "{chat_history}"],
       ["human", [
         "Here are the biometrics for the last minute:", 

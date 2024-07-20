@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getContext, onDestroy } from "svelte"
+  import { getContext, onMount, onDestroy } from "svelte"
   import { enhance } from "$app/forms"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
@@ -21,6 +21,21 @@
 
   $: showMonitor = meditationStatus === "meditating"
 
+  onMount(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      if (meditationStatus === "meditating") {
+        event.preventDefault()
+        await stopMeditation()
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  })
+
   async function fetchAudio(instructionId: string) {
     const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
     if (!response.ok) throw new Error("Failed to fetch audio")
@@ -35,7 +50,7 @@
     }
   }
 
-  onDestroy(() => {
+  onDestroy(async () => {
     if (channel) {
       channel.unsubscribe()
     }
