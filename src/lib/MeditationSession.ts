@@ -15,11 +15,10 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 interface MeditationResponse {
   thoughts: {
     stage: string;
-    seconds_left: string,
-    biometrics: string;
+    seconds_left: number;
+    biometric_analysis: string;
     mental_state: string;
     reasoning: string;
-    plan: string[];
     criticism: string;
     instruction: string;
     exit: boolean;
@@ -42,6 +41,7 @@ export class MeditationSession extends EventEmitter {
     input: string;
     biometrics: string;
     timeLeft: number;
+    move_instruction: string;
     chat_history: BaseMessage[];
   }, AIMessage>;
   private session: Session;
@@ -67,9 +67,8 @@ export class MeditationSession extends EventEmitter {
     this.parser = new JsonOutputParser<MeditationResponse>();
     
     const systemPrompt = `
-As a meditation guru, your task is to conduct a ${this.technique} meditation session using the biometric stats as a guide. 
-The session will last ${this.durationSeconds} seconds. Keep track of the time left and and plan each stage accordingly.
-Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below.
+As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. 
+Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 Keep the instructions brief. Encourage and reassure the user whenever possible. 
@@ -78,19 +77,18 @@ Do NOT repeat the same instruction. Mix it up. Be creative.
 Grounding Stage Instructions:
 - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
 - Ask the user to set an intention to sit still.
-- Move to the next stage after 60 seconds has elapsed.
 
 Immersion Stage Instructions:
 - Start by providing instructions for ${this.technique} technique.
 - Monitor the stats and assess the mental state of the user.
-- If user has lost focus then gently remind the user to re-focus. 
-- Move to the next stage ONLY when time left in session is less than 30 seconds.
+- If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
+- If the user seems to be focussed, do not provide any instruction.
 
 Closure Stage Instructions:
 - Provide instructions to reflect on the session and current mental state.
 - Ask user to rub the hands together, place the palms on the eyes and open it.
-- Ask the user to try and keep practicing it for the rest of the day. 
 - Summaize the biometrics observed during the session and provide feedback.
+- Ask the user to try and keep practicing it for the rest of the day. 
 - End this stage with a goodbye and set the 'exit' flag go true.
 
 ALWAYS respond in JSON format as described below:
@@ -98,11 +96,10 @@ ALWAYS respond in JSON format as described below:
   "thoughts": {{
     "stage": "stage of meditation",
     "seconds_left": "seconds left in session",
-    "biometrics": "analysis of the biometric stats",
+    "biometric_analysis": "analysis of the biometric stats",
     "mental_state": "assessment of user's mental state",
-    "reasoning": "reasoning",
-    "plan": ["short list", "that conveys", "long-term plan"],
-    "criticism": "constructive self-criticism of the plan",
+    "reasoning": "reasoning based on biometrics and mental state",
+    "criticism": "constructive self-criticism of the reasoning",
     "instruction": "instruction to provide to the user, if any",
     "exit": "true if this is the last instruction of the session, false otherwise"
   }}
@@ -118,8 +115,8 @@ Ensure the response can be parsed by JSON.parse()
         "Here are the biometrics for the last minute:", 
         "{biometrics}", 
         "", 
-        "", 
-        "Time left in session: {timeLeft} seconds.", 
+        "Time left in session: {timeLeft} seconds. {move_instruction}",
+        "",
         "Respond as per the JSON format specified: "
       ].join("\n")],
     ]);
@@ -132,6 +129,7 @@ Ensure the response can be parsed by JSON.parse()
       input: string;
       biometrics: string;
       timeLeft: number;
+      move_instruction: string; 
       chat_history: BaseMessage[];
     }, AIMessage>([
       RunnablePassthrough.assign({
@@ -190,7 +188,7 @@ Ensure the response can be parsed by JSON.parse()
   }  
 
   private async initializeEncoding() {
-    this.encoding = await encodingForModel("gpt-4");
+    this.encoding = await encodingForModel("gpt-4o");
   }
 
   private async countTokens(text: string): Promise<number> {
@@ -267,7 +265,13 @@ Ensure the response can be parsed by JSON.parse()
         console.warn("Failed to refresh session. Continuing with existing token.", refreshError);
       }
 
-      const timeLeft = this.durationSeconds - Math.floor((Date.now() - this.startTime) / 1000);
+      const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
+      const timeLeft = this.durationSeconds - elapsedSeconds;
+      
+      let move_instruction = "";
+      if (elapsedSeconds > 60 && timeLeft < 60) {
+        move_instruction = " Move to the next stage.";
+      }
       
       const biometrics = await this.getBiometricStats();
       
@@ -277,12 +281,13 @@ Ensure the response can be parsed by JSON.parse()
             "Here are the biometrics for the last minute:",
             biometrics,
             "",
-            `Time left in session: ${timeLeft} seconds.`,
+            `Time left in session: ${timeLeft} seconds.{move_instruction}`,
             "Respond as per the JSON format specified: "
           ].join("\n"),
           biometrics,
           timeLeft,
-          chat_history: await this.messageHistory.getMessages() // Add this line
+          move_instruction,
+          chat_history: await this.messageHistory.getMessages()
         },
         { configurable: { sessionId: this.meditationId.toString() } }
       );
