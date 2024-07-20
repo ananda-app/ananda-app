@@ -68,6 +68,7 @@ export const actions: Actions = {
       const meditationSession = new MeditationSession(
         meditationId,
         technique,
+        comments,
         durationMinutes,
         session
       );

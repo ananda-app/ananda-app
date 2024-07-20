@@ -46,7 +46,7 @@ export class MeditationSession extends EventEmitter {
   }, AIMessage>;
   private session: Session;
 
-  constructor(meditationId: number, technique: string, durationMinutes: number, session: Session) {
+  constructor(meditationId: number, technique: string, comments: string, durationMinutes: number, session: Session) {
     super();
 
     this.meditationId = meditationId;
@@ -73,6 +73,9 @@ The biometrics stats are estimated from the live video feed using rPPG algorithm
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 Keep the instructions brief. Encourage and reassure the user whenever possible. 
 Do NOT repeat the same instruction. Mix it up. Be creative. 
+
+User Comments:
+${comments ? comments.trim() : 'None'}
 
 Grounding Stage Instructions:
 - Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
@@ -106,7 +109,7 @@ ALWAYS respond in JSON format as described below:
 }}
 
 Ensure the response can be parsed by JSON.parse()
-    `;
+`;
 
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", systemPrompt],
@@ -122,7 +125,7 @@ Ensure the response can be parsed by JSON.parse()
     ]);
 
     const filterMessages = ({ chat_history }: { chat_history: BaseMessage[] }): BaseMessage[] => {
-      return chat_history.slice(-10);
+      return chat_history.slice(-100);
     };
 
     const chain = RunnableSequence.from<{
@@ -164,6 +167,13 @@ Ensure the response can be parsed by JSON.parse()
 
   private async refreshSession() {
     try {
+      if (this.session && this.session.expires_at) {
+        const expiresAt = new Date(this.session.expires_at).getTime();
+        if (Date.now() < expiresAt) {
+          return;
+        }
+      }
+
       const { data, error } = await this.supabase.auth.refreshSession(this.session);
   
       if (error) {
