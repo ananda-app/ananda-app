@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { RunnableWithMessageHistory, RunnableSequence, RunnablePassthrough } from "@langchain/core/runnables";
@@ -42,12 +44,20 @@ export class MeditationSession extends EventEmitter {
     chat_history: BaseMessage[];
   }, AIMessage>;
 
-  constructor(meditationId: number, supabase: SupabaseClient, technique: string, durationMinutes: number) {
+  constructor(meditationId: number, technique: string, durationMinutes: number, accessToken: string) {
     super();
 
     this.meditationId = meditationId;
-    this.supabase = supabase;
-    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY, verbose: true });
+    
+    this.supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    });
+    
+    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.75, apiKey: OPENAI_API_KEY });
     this.messageHistory = new InMemoryChatMessageHistory();
     this.technique = technique;
     this.durationSeconds = durationMinutes * 60;
@@ -102,7 +112,9 @@ Ensure the response can be parsed by JSON.parse()
       ["placeholder", "{chat_history}"],
       ["human", [
         "Here are the biometrics for the last minute:", 
-        "{biometrics}", "", 
+        "{biometrics}", 
+        "", 
+        "", 
         "Time left in session: {timeLeft} seconds.", 
         "Respond as per the JSON format specified: "
       ].join("\n")],
@@ -169,6 +181,10 @@ Ensure the response can be parsed by JSON.parse()
     if (error) throw error;
 
     console.log(`Getting biometrics for meditation ${this.meditationId}`);
+
+    if (data.length === 0) {
+      return 'elapsed_seconds,bpm,brpm,movement\n0,0,0,0';
+    }
 
     return ['elapsed_seconds,bpm,brpm,movement', 
       ...data.map(row => 
