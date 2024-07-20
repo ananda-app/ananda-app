@@ -256,7 +256,9 @@ Ensure the response can be parsed by JSON.parse()
     }
   }
 
-  private async runLLM() {
+  private async runLLM(retryAttempt: number = 0, errorMessage: string = ""): Promise<void> {
+    const MAX_RETRIES = 3;
+  
     try {
       // Attempt to refresh the session
       try {
@@ -264,24 +266,27 @@ Ensure the response can be parsed by JSON.parse()
       } catch (refreshError) {
         console.warn("Failed to refresh session. Continuing with existing token.", refreshError);
       }
-
+  
       const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
       const timeLeft = this.durationSeconds - elapsedSeconds;
       
-      let move_instruction = "";
-      if (elapsedSeconds > 60 && timeLeft < 60) {
-        move_instruction = " Move to the next stage.";
+      let move_instruction = "Stay in the immersion stage.";
+      if (elapsedSeconds > 60) {
+        move_instruction = "Move to the immersion stage.";
+      }
+      if (timeLeft < 60) {
+        move_instruction = "Move to the closure stage.";
       }
       
       const biometrics = await this.getBiometricStats();
       
       const response = await this.withMessageHistory.invoke(
         { 
-          input: [
+          input: errorMessage || [
             "Here are the biometrics for the last minute:",
             biometrics,
             "",
-            `Time left in session: ${timeLeft} seconds.{move_instruction}`,
+            `Time left in session is ${timeLeft} seconds. ${move_instruction}`,
             "Respond as per the JSON format specified: "
           ].join("\n"),
           biometrics,
@@ -291,19 +296,28 @@ Ensure the response can be parsed by JSON.parse()
         },
         { configurable: { sessionId: this.meditationId.toString() } }
       );
-
-      console.log("LLM Response:", response.content);
-
+  
+      console.log(`Attempt ${retryAttempt + 1} - LLM Response:`, response.content);
+  
       const responseContent = Array.isArray(response.content) ? response.content.join('') : response.content ?? '';
       const parsedResponse = await this.parser.parse(responseContent);
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
-
+  
       if (parsedResponse.thoughts.exit) {
         this.stop();
       }
-    } catch (error) {
-      console.error("Error in runLLM:", error);
-      this.emit('error', new Error("Failed to run LLM"));
+    } catch (error: any) {
+      console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);
+      
+      if (retryAttempt < MAX_RETRIES - 1) {
+        // If we haven't exhausted all retries, call runLLM again with an error message
+        return this.runLLM(retryAttempt + 1, "Invalid JSON. Please respond with a valid JSON in the format specified.");
+      } else {
+        // If we've exhausted all retries, emit an error event
+        this.emit('error', new Error(`Failed to run LLM after ${MAX_RETRIES} attempts: ${error.message}`));
+        // Provide a fallback instruction
+        await this.provideNextInstruction("Take a deep breath and continue your meditation. We're experiencing some technical difficulties.");
+      }
     }
   }
 }
