@@ -1,9 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { MeditationSession } from "$lib/MeditationSession";
-import { writable } from 'svelte/store';
-
-const activeMeditations = writable<Record<number, MeditationSession>>({});
 
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
   try {
@@ -75,29 +72,6 @@ export const actions: Actions = {
 
       meditationSession.start();
 
-      activeMeditations.update(meditations => ({
-        ...meditations,
-        [meditationId]: meditationSession
-      }));      
-
-      meditationSession.once('done', async () => {
-        const { error } = await supabase
-          .from('meditation_sessions')
-          .update({ end_ts: new Date() })
-          .eq('id', meditationId)
-          .eq('user_id', session.user.id);
-      
-        if (error) console.error(`Error updating session end time: ${error.message}`);
-      
-        console.log(`Meditation session completed for meditation ${meditationId}`);
-      
-        // Clean up the store
-        activeMeditations.update(meditations => {
-          const { [meditationId]: _, ...rest } = meditations;
-          return rest;
-        });
-      });
-
       console.log(`Successfully started ${technique} meditation ${meditationId} with comments: ${comments}`);
       
       // Return the result
@@ -121,33 +95,15 @@ export const actions: Actions = {
       return fail(400, { error: "Meditation ID is required" });
     }
 
-    let meditationSession: MeditationSession | undefined;
-    activeMeditations.subscribe(meditations => {
-      meditationSession = meditations[meditationId];
-    })();
+    const meditationSession = MeditationSession.getSession(meditationId);
 
     if (meditationSession) {
       meditationSession.stop();
-      console.log(`Stopped meditation ${meditationId}`);
+      console.log(`Sucessfully stopped meditation ${meditationId}`);
+      return { success: true };
     } else {
       console.log(`MeditationSession instance for ${meditationId} not found`);
-    }
-
-    try {
-      const { error } = await supabase
-        .from('meditation_sessions')
-        .update({ end_ts: new Date() })
-        .eq('id', meditationId)
-        .eq('user_id', session.user.id);
-
-      if (error) throw error;
-
-      console.log(`Successfully stopped meditation ${meditationId}`);
-
-      return { success: true };
-    } catch (error) {
-      console.error('Error stopping meditation:', error);
-      return fail(500, { error: "Failed to stop meditation" });
+      return fail(404, { error: "Meditation session not found" });
     }
   }
 };

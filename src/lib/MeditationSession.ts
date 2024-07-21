@@ -27,6 +27,8 @@ interface MeditationResponse {
 }
 
 export class MeditationSession extends EventEmitter {
+  private static activeSessions: Map<number, MeditationSession> = new Map();
+
   private meditationId: number;
   private supabase: SupabaseClient;
   private llm: ChatOpenAI;
@@ -155,6 +157,19 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       inputMessagesKey: "input",
       historyMessagesKey: "chat_history",
     });
+
+    MeditationSession.activeSessions.set(meditationId, this);
+  }
+
+  static getSession(meditationId: number): MeditationSession | undefined {
+    return MeditationSession.activeSessions.get(meditationId);
+  }
+
+  static stopSession(meditationId: number): void {
+    const session = MeditationSession.activeSessions.get(meditationId);
+    if (session) {
+      session.stop();
+    }
   }
 
   private createSupabaseClient(accessToken: string) {
@@ -211,6 +226,8 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     if (this.authListener) {
       this.authListener.unsubscribe();
     }
+    MeditationSession.activeSessions.delete(this.meditationId);
+    console.log(`MeditationSession ${this.meditationId} stopped`);
     this.emit('done');
   }
 
@@ -270,7 +287,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       if (elapsedSeconds > 60) {
         move_instruction = "Move to the immersion stage.";
       }
-      if (timeLeft < 60) {
+      if (timeLeft <= 0) {
         move_instruction = "Move to the closure stage.";
       }
       
@@ -300,7 +317,9 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
   
       if (parsedResponse.thoughts.exit) {
-        setTimeout(() => this.stop(), timeLeft * 1000);
+        setTimeout(async () => {
+          await this.endSession(true);
+        }, 10000);
       }
     } catch (error: any) {
       console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);
@@ -309,11 +328,29 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         // If we haven't exhausted all retries, call runLLM again with an error message
         return this.runLLM(retryAttempt + 1, "Invalid JSON. Please respond with a valid JSON in the format specified.");
       } else {
-        // If we've exhausted all retries, emit an error event
-        this.emit('error', new Error(`Failed to run LLM after ${MAX_RETRIES} attempts: ${error.message}`));
-        // Provide a fallback instruction
-        await this.provideNextInstruction("Take a deep breath and continue your meditation. We're experiencing some technical difficulties.");
+        // If we've exhausted all retries, end the session with an error
+        await this.endSession(false);
       }
+    }
+  }
+
+  private async endSession(success: boolean) {
+    try {
+      const { error } = await this.supabase
+        .from('meditation_sessions')
+        .update({ end_ts: new Date().toISOString() })
+        .eq('id', this.meditationId)
+        .eq('user_id', this.session.user.id);
+
+      if (error) throw error;
+
+      console.log(`end_ts updated for meditation ${this.meditationId}`);
+
+      this.stop();
+      this.emit('done', { success });
+    } catch (error) {
+      console.error('Error ending session:', error);
+      this.emit('done', { success: false, error });
     }
   }
 }
