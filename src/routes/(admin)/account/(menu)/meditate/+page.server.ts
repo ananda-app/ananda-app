@@ -98,7 +98,7 @@ export const actions: Actions = {
     const meditationSession = MeditationSession.getSession(meditationId);
 
     if (meditationSession) {
-      meditationSession.stop();
+      meditationSession.endSession(true);
       console.log(`Sucessfully stopped meditation ${meditationId}`);
       return { success: true };
     } else {

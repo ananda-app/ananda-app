@@ -334,7 +334,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     }
   }
 
-  private async endSession(success: boolean) {
+  async endSession(success: boolean) {
     try {
       const { error } = await this.supabase
         .from('meditation_sessions')
