@@ -1,4 +1,4 @@
-import { createClient, AuthApiError, type Session } from '@supabase/supabase-js';
+import { createClient, AuthApiError, type Session, type Subscription } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
@@ -46,6 +46,7 @@ export class MeditationSession extends EventEmitter {
     chat_history: BaseMessage[];
   }, AIMessage>;
   private session: Session;
+  private authListener: Subscription;
 
   constructor(meditationId: number, technique: string, comments: string, durationMinutes: number, session: Session) {
     super();
@@ -67,6 +68,8 @@ export class MeditationSession extends EventEmitter {
     this.initializeEncoding();
     this.parser = new JsonOutputParser<MeditationResponse>();
     
+    this.authListener = this.setupAuthListener();
+
     const systemPrompt = `
 As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${meditationId}.
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
@@ -168,37 +171,21 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     });
   }
 
-  private async refreshSession() {
-    try {
-      if (this.session && this.session.expires_at) {
-        const expiresAt = new Date(this.session.expires_at).getTime();
-        if (Date.now() < expiresAt) {
-          return;
-        }
+  private setupAuthListener(): Subscription {
+    const { data: { subscription } } = this.supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_OUT') {
+        console.log(`User signed out during meditation session, meditation: ${this.meditationId}`);
+        this.stop();
+        this.emit('sessionEnded', 'User signed out');
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        console.log(`Token refreshed during meditation session, meditation: ${this.meditationId}`);
+        this.session = session;
+        this.supabase = this.createSupabaseClient(session.access_token);
       }
-
-      const { data, error } = await this.supabase.auth.refreshSession(this.session);
-  
-      if (error) {
-        if (error instanceof AuthApiError && error.message.includes('Invalid Refresh Token')) {
-          console.log("Invalid refresh token. Attempting to use existing access token.");
-          return; // Continue with the existing token
-        }
-        throw error;
-      }
-  
-      if (data.session) {
-        this.session = data.session;
-        this.supabase = this.createSupabaseClient(this.session.access_token);
-        console.log("Session refreshed successfully");
-      } else {
-        throw new Error("No session data returned");
-      }
-    } catch (error) {
-      console.error("Failed to refresh session:", error);
-      throw error;
-    }
-  }  
+    });
+    return subscription;
+  }
 
   private async initializeEncoding() {
     this.encoding = await encodingForModel("gpt-4o");
@@ -220,6 +207,9 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    if (this.authListener) {
+      this.authListener.unsubscribe();
     }
     this.emit('done');
   }
@@ -273,13 +263,6 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     const MAX_RETRIES = 3;
   
     try {
-      // Attempt to refresh the session
-      try {
-        await this.refreshSession();
-      } catch (refreshError) {
-        console.warn("Failed to refresh session. Continuing with existing token.", refreshError);
-      }
-  
       const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
       const timeLeft = this.durationSeconds - elapsedSeconds;
       

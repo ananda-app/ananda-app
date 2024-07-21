@@ -1,10 +1,16 @@
 <script lang="ts">
   import { getContext, onMount, onDestroy } from "svelte"
   import { enhance } from "$app/forms"
+  import { goto } from "$app/navigation"
   import type { Writable } from "svelte/store"
   import type { ActionResult } from "@sveltejs/kit"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
-  import type { RealtimeChannel } from "@supabase/supabase-js"
+  import type {
+    AuthChangeEvent,
+    Session,
+    RealtimeChannel,
+    Subscription,
+  } from "@supabase/supabase-js"
   import { formatTechnique } from "$lib/formatUtils"
 
   let adminSection: Writable<string> = getContext("adminSection")
@@ -18,6 +24,7 @@
   let meditationId: string | null = null
   let audio: HTMLAudioElement
   let channel: RealtimeChannel
+  let authListener: Subscription
 
   $: showMonitor = meditationStatus === "meditating"
 
@@ -31,8 +38,20 @@
 
     window.addEventListener("beforeunload", handleBeforeUnload)
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        if (event === "SIGNED_OUT") {
+          handleSignOut()
+        }
+      },
+    )
+    authListener = subscription
+
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload)
+      if (authListener) authListener.unsubscribe()
     }
   })
 
@@ -54,7 +73,17 @@
     if (channel) {
       channel.unsubscribe()
     }
+    if (authListener) {
+      authListener.unsubscribe()
+    }
   })
+
+  function handleSignOut() {
+    if (meditationStatus === "meditating") {
+      stopMeditation()
+    }
+    goto("/login/sign_in")
+  }
 
   function subscribeToDbChanges() {
     try {
@@ -90,7 +119,9 @@
                 payload.new.end_ts !== null &&
                 payload.new.id === meditationId
               ) {
-                console.log(`stopping meditation ${meditationId}`)
+                console.log(
+                  `stopping meditation ${meditationId} as end_ts updated`,
+                )
                 meditationStatus = "ended"
                 meditationId = null
               }
