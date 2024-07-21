@@ -25,8 +25,27 @@
   let audio: HTMLAudioElement
   let channel: RealtimeChannel
   let authListener: Subscription
+  let wakeLock: WakeLockSentinel | null = null
 
   $: showMonitor = meditationStatus === "meditating"
+
+  async function requestWakeLock() {
+    try {
+      wakeLock = await navigator.wakeLock.request("screen")
+      console.log("Wake Lock is active")
+    } catch (err) {
+      console.error(`Failed to request Wake Lock: ${err}`)
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release().then(() => {
+        wakeLock = null
+        console.log("Wake Lock released")
+      })
+    }
+  }
 
   onMount(() => {
     const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
@@ -76,6 +95,7 @@
     if (authListener) {
       authListener.unsubscribe()
     }
+    releaseWakeLock()
   })
 
   function handleSignOut() {
@@ -124,6 +144,7 @@
                 )
                 meditationStatus = "ended"
                 meditationId = null
+                releaseWakeLock()
               }
             }
           },
@@ -139,6 +160,7 @@
       meditationStatus = "meditating"
       meditationId = result.data?.meditationId ?? null
       subscribeToDbChanges()
+      requestWakeLock()
     } else if (result.type === "failure") {
       error = result.data?.error || "An error occurred"
     }
@@ -158,6 +180,7 @@
         if (result.type === "success") {
           meditationStatus = "ended"
           meditationId = null
+          releaseWakeLock()
         } else {
           error = result.error || "Failed to stop meditation"
         }

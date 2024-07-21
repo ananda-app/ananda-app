@@ -300,7 +300,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
   
       if (parsedResponse.thoughts.exit) {
-        this.stop();
+        setTimeout(() => this.stop(), timeLeft * 1000);
       }
     } catch (error: any) {
       console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);
