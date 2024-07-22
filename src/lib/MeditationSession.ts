@@ -60,12 +60,12 @@ export class MeditationSession {
     this.session = session;
      
     this.supabase = this.createSupabaseClient(session.access_token);
-    this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 1.0, apiKey: OPENAI_API_KEY });
+    this.model = model;
+    this.llm = new ChatOpenAI({ model: this.model, temperature: 1.0, apiKey: OPENAI_API_KEY });
     this.messageHistory = new InMemoryChatMessageHistory();
     this.method = method;
     this.comments = comments;
     this.durationSeconds = durationMinutes * 60;
-    this.model = model;
     this.parser = new JsonOutputParser<MeditationResponse>();
     this.authListener = this.setupAuthListener();
 
@@ -152,6 +152,8 @@ export class MeditationSession {
 
   async start() {
     try {
+      console.log("in meditation session start function");
+      
       this.startTime = Date.now();
       await this.initializeEncoding();
       const userInfo = await this.getUserInfo(this.session.user.id);
