@@ -9,7 +9,6 @@ import { OPENAI_API_KEY } from '$env/static/private';
 import type { BaseMessage } from "@langchain/core/messages";
 import { encodingForModel } from "@langchain/core/utils/tiktoken";
 import { JsonOutputParser } from "@langchain/core/output_parsers";
-import { EventEmitter } from 'events';
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 interface MeditationResponse {
@@ -25,7 +24,7 @@ interface MeditationResponse {
   }
 }
 
-export class MeditationSession extends EventEmitter {
+export class MeditationSession {
   private static activeSessions: Map<number, MeditationSession> = new Map();
 
   private meditationId: number;
@@ -52,8 +51,6 @@ export class MeditationSession extends EventEmitter {
   private model: string;
 
   constructor(meditationId: number, method: string, comments: string, durationMinutes: number, session: Session, model: string = 'gpt-4o') {
-    super();
-
     this.meditationId = meditationId;
  
     // Validate the session
@@ -133,7 +130,6 @@ export class MeditationSession extends EventEmitter {
       if (event === 'SIGNED_OUT') {
         console.log(`User signed out during meditation session, meditation: ${this.meditationId}`);
         await this.endSession(false);
-        this.emit('sessionEnded', 'User signed out');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         console.log(`Token refreshed during meditation session, meditation: ${this.meditationId}`);
         this.session = session;
@@ -267,7 +263,6 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     }
     MeditationSession.activeSessions.delete(this.meditationId);
     console.log(`MeditationSession ${this.meditationId} stopped`);
-    this.emit('done');
   }
 
   private async getBiometricStats(): Promise<string> {
@@ -386,10 +381,8 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       console.log(`end_ts updated for meditation ${this.meditationId}`);
 
       this.stop();
-      this.emit('done', { success });
     } catch (error) {
       console.error('Error ending session:', error);
-      this.emit('done', { success: false, error });
     }
   }
 }
