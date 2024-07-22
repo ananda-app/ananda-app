@@ -31,13 +31,11 @@ export const actions: Actions = {
     const technique = String(formData.get('technique'));
     const comments = String(formData.get("comments"));
 
-    // Validate the form data
     if (!durationMinutes || isNaN(Number(durationMinutes))) {
       return fail(400, { error: "Duration is required and must be a number" });
     }
 
     try {
-      // Insert the session data into the 'meditation_sessions' table
       const startTime = new Date();
 
       const { data, error } = await supabase
@@ -56,7 +54,6 @@ export const actions: Actions = {
 
       if (error) throw error;
 
-      // Retrieve the ID of the newly created session
       if (!data || data.length === 0) {
         throw new Error("Failed to retrieve meditation ID");
       }
@@ -74,11 +71,13 @@ export const actions: Actions = {
 
       console.log(`Successfully started ${technique} meditation ${meditationId} with comments: ${comments}`);
       
-      // Return the result
-      return { success: true, meditationId: meditationId };
+      return {
+        success: true,
+        redirect: `/account/meditate/biometrics?id=${meditationId}`
+      };
     } catch (error) {
       console.error(error);
-      return fail(500, { error: "An error occurred while processing your request" });
+      throw redirect(303, "/account/meditate/oops");
     }
   },
 
@@ -98,12 +97,17 @@ export const actions: Actions = {
     const meditationSession = MeditationSession.getSession(meditationId);
 
     if (meditationSession) {
-      meditationSession.endSession(true);
-      console.log(`Sucessfully stopped meditation ${meditationId}`);
-      return { success: true };
+      try {
+        await meditationSession.endSession(true);
+        console.log(`Successfully stopped meditation ${meditationId}`);
+        return redirect(303, "/account/meditate/thank-you");
+      } catch (error) {
+        console.error("Error stopping meditation:", error);
+        throw redirect(303, "/account/meditate/oops");
+      }
     } else {
       console.log(`MeditationSession instance for ${meditationId} not found`);
-      return fail(404, { error: "Meditation session not found" });
+      throw redirect(303, "/account/meditate/oops");
     }
   }
 };

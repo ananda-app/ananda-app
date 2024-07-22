@@ -188,10 +188,9 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
 
   private setupAuthListener(): Subscription {
     const { data: { subscription } } = this.supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
       if (event === 'SIGNED_OUT') {
         console.log(`User signed out during meditation session, meditation: ${this.meditationId}`);
-        this.stop();
+        await this.endSession(false);
         this.emit('sessionEnded', 'User signed out');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         console.log(`Token refreshed during meditation session, meditation: ${this.meditationId}`);
@@ -319,7 +318,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       if (parsedResponse.thoughts.exit) {
         setTimeout(async () => {
           await this.endSession(true);
-        }, 10000);
+        }, 30000);
       }
     } catch (error: any) {
       console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);
