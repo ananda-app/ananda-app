@@ -151,11 +151,12 @@ export class MeditationSession {
   }
 
   async start() {
-    this.startTime = Date.now();
-    await this.initializeEncoding();
-    const userInfo = await this.getUserInfo(this.session.user.id);
-  
-    const systemPrompt = `
+    try {
+      this.startTime = Date.now();
+      await this.initializeEncoding();
+      const userInfo = await this.getUserInfo(this.session.user.id);
+    
+      const systemPrompt = `
 As a meditation guru, your task is to conduct a ${this.method} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The ID of this session is ${this.meditationId}.
 Conduct the session in three stages: grounding, immersion, and closure. Instructions for each stage are detailed below. Move to the next stage ONLY when instructed.
 The biometric stats are estimated from the live video feed using the rPPG algorithm. Infer the mental/physical state of the user from the data. Invalid values may indicate incorrect posture.
@@ -206,53 +207,56 @@ ALWAYS respond in JSON format as described below:
   }}
 }}
 
-
 Ensure the JSON is valid and can be parsed by JSON.parse()
 `;
 
-    const prompt = ChatPromptTemplate.fromMessages([
-      ["system", systemPrompt.trim()],
-      ["placeholder", "{chat_history}"],
-      ["human", [
-        "Here are the biometrics for the last minute:", 
-        "{biometrics}", 
-        "", 
-        "Time left in session: {timeLeft} seconds. {move_instruction}",
-        "",
-        "Respond as per the JSON format specified: "
-      ].join("\n")],
-    ]);
+      const prompt = ChatPromptTemplate.fromMessages([
+        ["system", systemPrompt.trim()],
+        ["placeholder", "{chat_history}"],
+        ["human", [
+          "Here are the biometrics for the last minute:", 
+          "{biometrics}", 
+          "", 
+          "Time left in session: {timeLeft} seconds. {move_instruction}",
+          "",
+          "Respond as per the JSON format specified: "
+        ].join("\n")],
+      ]);
 
-    const filterMessages = ({ chat_history }: { chat_history: BaseMessage[] }): BaseMessage[] => {
-      return chat_history.slice(-100);
-    };
+      const filterMessages = ({ chat_history }: { chat_history: BaseMessage[] }): BaseMessage[] => {
+        return chat_history.slice(-100);
+      };
 
-    const chain = RunnableSequence.from<{
-      input: string;
-      biometrics: string;
-      timeLeft: number;
-      move_instruction: string; 
-      chat_history: BaseMessage[];
-    }, AIMessage>([
-      RunnablePassthrough.assign({
-        chat_history: (input: { chat_history: BaseMessage[] }) => 
-          filterMessages({ chat_history: input.chat_history }),
-      }),
-      prompt,
-      this.llm
-    ]);
+      const chain = RunnableSequence.from<{
+        input: string;
+        biometrics: string;
+        timeLeft: number;
+        move_instruction: string; 
+        chat_history: BaseMessage[];
+      }, AIMessage>([
+        RunnablePassthrough.assign({
+          chat_history: (input: { chat_history: BaseMessage[] }) => 
+            filterMessages({ chat_history: input.chat_history }),
+        }),
+        prompt,
+        this.llm
+      ]);
 
-    this.withMessageHistory = new RunnableWithMessageHistory({
-      runnable: chain,
-      getMessageHistory: async (sessionId) => this.messageHistory,
-      inputMessagesKey: "input",
-      historyMessagesKey: "chat_history",
-    });
+      this.withMessageHistory = new RunnableWithMessageHistory({
+        runnable: chain,
+        getMessageHistory: async (sessionId) => this.messageHistory,
+        inputMessagesKey: "input",
+        historyMessagesKey: "chat_history",
+      });
 
-    console.log(`Starting meditation session with ID: ${this.meditationId}`);
+      console.log(`Starting meditation session with ID: ${this.meditationId}`);
 
-    await this.runLLM();
-    this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
+      await this.runLLM();
+      this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
+    } catch (error) {
+      console.error(`Error starting meditation session with ID: ${this.meditationId}`, error);
+      throw error;
+    }
   }
 
   stop() {
