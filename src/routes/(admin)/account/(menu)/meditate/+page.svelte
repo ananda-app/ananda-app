@@ -1,8 +1,13 @@
 <script lang="ts">
   import { enhance } from "$app/forms"
   import { goto } from "$app/navigation"
+  import { getContext } from "svelte"
   import type { ActionResult } from "@sveltejs/kit"
   import { formatTechnique } from "$lib/formatUtils"
+  import type { Writable } from "svelte/store"
+
+  let adminSection: Writable<string> = getContext("adminSection")
+  adminSection.set("meditate")
 
   export let data
   let { supabase } = data
@@ -99,5 +104,11 @@
         </div>
       </div>
     </form>
+
+    <p class="text-sm text-gray-500 mt-4">
+      Note: Your camera will be used to collect biometric stats during
+      meditation. The video will not be captured or saved; only the live video
+      feed will be used to estimate biometrics.
+    </p>
   </div>
 </div>

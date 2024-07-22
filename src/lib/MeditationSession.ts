@@ -315,7 +315,8 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       const parsedResponse = await this.parser.parse(responseContent);
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
   
-      if (parsedResponse.thoughts.exit) {
+      if (parsedResponse.thoughts.exit === true) {
+        console.log(`Exit flag is set to true for meditation ${this.meditationId}`);
         setTimeout(async () => {
           await this.endSession(true);
         }, 30000);
