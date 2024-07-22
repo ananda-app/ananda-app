@@ -138,6 +138,8 @@ CREATE TABLE meditation_sessions (
     duration INTEGER NOT NULL,
     method TEXT,
     comments TEXT,
+    rating integer null,
+    feedback text null,    
     start_ts TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     end_ts TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY (user_id) REFERENCES auth.users(id)

@@ -138,7 +138,7 @@
   function endMeditation() {
     releaseWakeLock()
     if (pollingTimer) clearTimeout(pollingTimer)
-    goto("/account/meditate/thank-you")
+    goto(`/account/meditate/thank-you?id=${meditationId}`)
   }
 
   function handleBeforeUnload(event: BeforeUnloadEvent) {

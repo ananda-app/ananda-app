@@ -146,7 +146,9 @@ export interface Database {
           method: string | null,
           comments: string | null,
           start_ts: Date,
-          end_ts: Date | null
+          end_ts: Date | null,
+          rating: number | null, 
+          feedback: string | null
         },
         Insert: {
           id?: string,
@@ -155,7 +157,9 @@ export interface Database {
           method?: string | null,
           comments?: string | null,
           start_ts?: Date,
-          end_ts?: Date | null
+          end_ts?: Date | null,
+          rating?: number | null,
+          feedback?: string | null
         },
         Update: {
           id?: string,
@@ -164,7 +168,9 @@ export interface Database {
           method?: string | null,
           comments?: string | null,
           start_ts?: Date,
-          end_ts?: Date | null
+          end_ts?: Date | null,
+          rating?: number | null,
+          feedback?: string | null
         },
         Relationships: [
           {
