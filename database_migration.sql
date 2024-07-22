@@ -136,7 +136,7 @@ CREATE TABLE meditation_sessions (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL,
     duration INTEGER NOT NULL,
-    technique TEXT,
+    method TEXT,
     comments TEXT,
     start_ts TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     end_ts TIMESTAMP WITH TIME ZONE,

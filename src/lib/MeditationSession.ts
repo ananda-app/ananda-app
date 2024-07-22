@@ -34,7 +34,7 @@ export class MeditationSession extends EventEmitter {
   private llm: ChatOpenAI;
   private messageHistory: InMemoryChatMessageHistory;
   private intervalId: NodeJS.Timeout | null = null;
-  private technique: string;
+  private method: string;
   private durationSeconds: number;
   private maxTokens: number = 100000; 
   private encoding: any = null;
@@ -49,8 +49,9 @@ export class MeditationSession extends EventEmitter {
   }, AIMessage>;
   private session: Session;
   private authListener: Subscription;
+  private model: string;
 
-  constructor(meditationId: number, technique: string, comments: string, durationMinutes: number, session: Session) {
+  constructor(meditationId: number, method: string, comments: string, durationMinutes: number, session: Session, model: string = 'gpt-4o') {
     super();
 
     this.meditationId = meditationId;
@@ -64,8 +65,10 @@ export class MeditationSession extends EventEmitter {
     this.supabase = this.createSupabaseClient(session.access_token);
     this.llm = new ChatOpenAI({ model: 'gpt-4o', temperature: 1.0, apiKey: OPENAI_API_KEY });
     this.messageHistory = new InMemoryChatMessageHistory();
-    this.technique = technique;
+    this.method = method;
     this.durationSeconds = durationMinutes * 60;
+    this.model = model;
+
     this.startTime = Date.now();
     this.initializeEncoding();
     this.parser = new JsonOutputParser<MeditationResponse>();
@@ -73,7 +76,7 @@ export class MeditationSession extends EventEmitter {
     this.authListener = this.setupAuthListener();
 
     const systemPrompt = `
-As a meditation guru, your task is to conduct a ${this.technique} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${meditationId}.
+As a meditation guru, your task is to conduct a ${this.method} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${meditationId}.
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
 The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Zero values may indicate wrong posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
@@ -88,7 +91,7 @@ Grounding Stage Instructions:
 - Ask the user to set an intention to sit still.
 
 Immersion Stage Instructions:
-- Start by providing instructions for ${this.technique} technique.
+- Start by providing instructions for ${this.method} method.
 - Monitor the stats and assess the mental state of the user.
 - If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
 - If the user seems to be focussed, do not provide any instruction.
@@ -319,7 +322,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         console.log(`Exit flag ${parsedResponse.thoughts.exit}, time left ${timeLeft}, ending meditation ${this.meditationId}`);
         setTimeout(async () => {
           await this.endSession(true);
-        }, 30000);
+        }, 40000);
       }
     } catch (error: any) {
       console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);

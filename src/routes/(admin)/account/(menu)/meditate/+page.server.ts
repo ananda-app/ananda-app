@@ -28,9 +28,8 @@ export const actions: Actions = {
 
     const formData = await request.formData();
     const durationMinutes = Number(formData.get("duration"));
-    const technique = String(formData.get('technique'));
+    const method = String(formData.get('method'));
     const comments = String(formData.get("comments"));
-
     if (!durationMinutes || isNaN(Number(durationMinutes))) {
       return fail(400, { error: "Duration is required and must be a number" });
     }
@@ -44,7 +43,7 @@ export const actions: Actions = {
           { 
             user_id: session.user.id,
             duration: durationMinutes, 
-            technique: technique as string | null, 
+            method: method as string | null, 
             comments: comments as string | null,
             start_ts: startTime,
             end_ts: null 
@@ -61,15 +60,16 @@ export const actions: Actions = {
 
       const meditationSession = new MeditationSession(
         meditationId,
-        technique,
+        method,
         comments,
         durationMinutes,
-        session
+        session,
+        "gpt-4o-mini"
       );
 
       meditationSession.start();
 
-      console.log(`Successfully started ${technique} meditation ${meditationId} with comments: ${comments}`);
+      console.log(`Successfully started ${method} meditation ${meditationId} with comments: ${comments}`);
       
       return {
         success: true,

@@ -65,12 +65,12 @@
         </div>
 
         <div class="mb-4">
-          <label for="technique" class="label">
-            <span class="label-text">Technique</span>
+          <label for="method" class="label">
+            <span class="label-text">Method</span>
           </label>
           <select
-            id="technique"
-            name="technique"
+            id="method"
+            name="method"
             class="select select-bordered w-full"
             required
           >
@@ -101,9 +101,9 @@
     </form>
 
     <p class="text-sm text-gray-500 mt-4">
-      Note: Your camera will be used to collect biometric stats during
-      meditation. The video will not be captured or saved; only the live video
-      feed will be used to estimate biometrics.
+      Note: Your camera will be utilized to gather biometric data during
+      meditation. The video will not be recorded or stored; only the live feed
+      will be used to analyze biometrics and guide the session.
     </p>
   </div>
 </div>

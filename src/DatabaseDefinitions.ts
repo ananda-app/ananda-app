@@ -143,7 +143,7 @@ export interface Database {
           id: string,
           user_id: string,
           duration: number,
-          technique: string | null,
+          method: string | null,
           comments: string | null,
           start_ts: Date,
           end_ts: Date | null
@@ -152,7 +152,7 @@ export interface Database {
           id?: string,
           user_id: string,
           duration: number,
-          technique?: string | null,
+          method?: string | null,
           comments?: string | null,
           start_ts?: Date,
           end_ts?: Date | null
@@ -161,7 +161,7 @@ export interface Database {
           id?: string,
           user_id?: string,
           duration?: number,
-          technique?: string | null,
+          method?: string | null,
           comments?: string | null,
           start_ts?: Date,
           end_ts?: Date | null
