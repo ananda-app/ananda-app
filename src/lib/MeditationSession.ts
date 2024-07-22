@@ -22,7 +22,6 @@ interface MeditationResponse {
     reasoning: string;
     criticism: string;
     instruction: string;
-    exit: boolean;
   }
 }
 
@@ -78,7 +77,7 @@ export class MeditationSession extends EventEmitter {
     const systemPrompt = `
 As a meditation guru, your task is to conduct a ${this.method} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${meditationId}.
 Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
-The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Zero values may indicate wrong posture.
+The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Invalid values may indicate wrong posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
 Keep the instructions brief. Encourage and reassure the user whenever possible. Consider the user comments, if any.
 Do NOT repeat the same instruction. Mix it up. Be creative. 
@@ -91,18 +90,19 @@ Grounding Stage Instructions:
 - Ask the user to set an intention to sit still.
 
 Immersion Stage Instructions:
-- Start by providing instructions for ${this.method} method.
+- Start by providing instructions for the ${this.method} method.
 - Monitor the stats and assess the mental state of the user.
 - If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
-- If the user seems to be focussed, do not provide any instruction.
+- Do not provide any instruction if the user is focussed.
 - Keep cycling through the instructions till the stage is over.
+- Remind the user to correct posture on invalid biometrics data.
 
 Closure Stage Instructions:
 - Provide instructions to reflect on the session and current mental state.
 - Ask user to rub the hands together, place the palms on the eyes and open it.
 - Summaize the biometrics observed during the session and provide feedback.
 - Ask the user to try and keep practicing it for the rest of the day. 
-- End this stage with a goodbye and set the 'exit' flag go true.
+- End this stage with a goodbye.
 
 ALWAYS respond in JSON format as described below:
 {{
@@ -115,7 +115,6 @@ ALWAYS respond in JSON format as described below:
     "reasoning": "reasoning based on biometrics and mental state",
     "criticism": "constructive self-criticism of the reasoning",
     "instruction": "instruction to provide to the user, if any",
-    "exit": "true if this is the last instruction of the session, false otherwise"
   }}
 }}
 
@@ -319,11 +318,9 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       const parsedResponse = await this.parser.parse(responseContent);
       await this.provideNextInstruction(parsedResponse.thoughts.instruction);
   
-      if (parsedResponse.thoughts.exit == true || timeLeft <= 0) {
-        console.log(`Exit flag ${parsedResponse.thoughts.exit}, time left ${timeLeft}, ending meditation ${this.meditationId}`);
-        setTimeout(async () => {
-          await this.endSession(true);
-        }, 40000);
+      if (timeLeft <= 0) {
+        console.log(`time left ${timeLeft}, ending meditation ${this.meditationId}`);
+        await this.endSession(true);
       }
     } catch (error: any) {
       console.error(`Attempt ${retryAttempt + 1} - Error in runLLM:`, error);

@@ -11,6 +11,7 @@
   $: meditationId = Number($page.url.searchParams.get("id"))
 
   let audio: HTMLAudioElement
+  let currentAudioPromise: Promise<void> | null = null
   let channel: RealtimeChannel
   let wakeLock: WakeLockSentinel | null = null
   let isConnected = false
@@ -110,7 +111,12 @@
     } else if (payload.table === "meditation_sessions") {
       if (payload.new.end_ts !== null && payload.new.id === meditationId) {
         console.log(`Stopping meditation ${meditationId} as end_ts updated`)
-        endMeditation()
+        setTimeout(async () => {
+          if (currentAudioPromise) {
+            await currentAudioPromise
+          }
+          endMeditation()
+        }, 5000)
       }
     }
   }
@@ -123,12 +129,20 @@
     return URL.createObjectURL(blob)
   }
 
-  function playAudio(audioUrl: string) {
+  function playAudio(audioUrl: string): Promise<void> {
     console.log(`Playing audio from URL: ${audioUrl}`)
     if (audio) {
       audio.src = audioUrl
+      currentAudioPromise = new Promise((resolve) => {
+        audio.onended = () => {
+          console.log("Audio playback ended")
+          resolve()
+        }
+      })
       audio.play()
+      return currentAudioPromise
     }
+    return Promise.resolve()
   }
 
   async function stopMeditation() {
@@ -186,7 +200,6 @@
   function handleBeforeUnload(event: BeforeUnloadEvent) {
     stopMeditation()
     event.preventDefault()
-    event.returnValue = ""
   }
 
   onMount(() => {
