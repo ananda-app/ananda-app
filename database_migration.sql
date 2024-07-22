@@ -199,12 +199,13 @@ FOR SELECT USING (
 );
 
 CREATE TABLE meditation_instructions (
-    id SERIAL PRIMARY KEY,
+    id BIGINT NOT NULL,
     ts TIMESTAMPTZ NOT NULL,
     meditation_id BIGINT NOT NULL,
     elapsed_seconds INTEGER NOT NULL,
     instruction TEXT NOT NULL,
-    play_ts TIMESTAMPTZ
+    play_ts TIMESTAMPTZ,
+    PRIMARY KEY (id, ts)
 );
 
 SELECT create_hypertable('meditation_instructions', 'ts');
