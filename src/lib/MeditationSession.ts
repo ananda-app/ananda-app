@@ -160,12 +160,12 @@ export class MeditationSession extends EventEmitter {
     const userInfo = await this.getUserInfo(this.session.user.id);
   
     const systemPrompt = `
-As a meditation guru, your task is to conduct a ${this.method} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The id of this session is ${this.meditationId}.
-Conduct the session in three stages: grounding, immersion and closure. Instructions for each stage is detailed below. Move to the next stage ONLY when instructed.
-The biometrics stats are estimated from the live video feed using rPPG algorithm. Infer the mental/physical state of the user from the data. Invalid values may indicate wrong posture.
+As a meditation guru, your task is to conduct a ${this.method} meditation session of ${this.durationSeconds} seconds using the biometric stats as a guide. The ID of this session is ${this.meditationId}.
+Conduct the session in three stages: grounding, immersion, and closure. Instructions for each stage are detailed below. Move to the next stage ONLY when instructed.
+The biometric stats are estimated from the live video feed using the rPPG algorithm. Infer the mental/physical state of the user from the data. Invalid values may indicate incorrect posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
-Keep the instructions brief. Encourage and reassure the user whenever possible. Consider the user comments, if any.
-Do NOT repeat the same instruction. Mix it up. Be creative. 
+Keep the instructions brief. Encourage and reassure the user whenever possible. Consider the user's comments, if any.
+Do NOT repeat the same instruction. Mix it up. Be creative. Make it fun. 
 
 User Information:
 Name: ${userInfo.fullName}
@@ -177,24 +177,24 @@ ${this.comments ? this.comments.trim() : 'None'}
 
 Grounding Stage Instructions:
 - Greet the user warmly and provide instructions to sit in a comfortable posture and look straight at the camera.
-- Instruct the user to take few deep breaths and close the eyes when ready.
+- Instruct the user to take a few deep breaths and close their eyes when ready.
 - Ask the user to set an intention to sit as still as possible.
-- Inform that you'll monitor the biometrics and provide further instructions.
+- Inform them that you'll monitor their biometrics and provide further instructions.
 
 Immersion Stage Instructions:
 - Start by providing instructions for the ${this.method} meditation technique.
 - Assess the mental state of the user based on the biometrics.
-- If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
-- Do not provide any instruction if the user is focussed.
-- Keep cycling through the instructions till the stage is over.
-- Remind the user to correct posture on invalid biometrics data.
+- If the user seems to have lost focus, provide a gentle reminder to return to the object of focus. 
+- Do not provide any instruction if the user is focused.
+- Keep cycling through the instructions until the stage is over.
+- Remind the user to correct their posture if invalid biometric data is detected.
 
 Closure Stage Instructions:
 - Provide instructions to reflect on the session and current mental state.
-- Ask user to rub the hands together, place the palms on the eyes and open it.
-- Summaize the biometrics observed during the session and provide feedback.
-- Ask the user to try and keep practicing it for the rest of the day. 
-- End this stage with a goodbye till the next session.
+- Ask the user to rub their hands together, place their palms on their eyes, and then open them.
+- Summarize the biometrics observed during the session and provide feedback.
+- Encourage the user to continue practicing throughout the day. 
+- End this stage with a farewell until the next session.
 
 ALWAYS respond in JSON format as described below:
 {{
@@ -206,13 +206,14 @@ ALWAYS respond in JSON format as described below:
     "mental_state": "assessment of user's mental state",
     "reasoning": "reasoning based on biometrics and mental state",
     "criticism": "constructive self-criticism of the reasoning",
-    "instruction": "instruction to provide to the user, if any",
+    "instruction": "instruction to provide to the user, if any"
   }}
 }}
 
+
 Ensure the JSON is valid and can be parsed by JSON.parse()
 `;
-  
+
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", systemPrompt.trim()],
       ["placeholder", "{chat_history}"],
@@ -349,7 +350,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         { configurable: { sessionId: this.meditationId.toString() } }
       );
   
-      console.log(`Attempt ${retryAttempt + 1} - LLM Response:`, response.content);
+      //console.log(`Attempt ${retryAttempt + 1} - LLM Response:`, response.content);
   
       const responseContent = Array.isArray(response.content) ? response.content.join('') : response.content ?? '';
       const parsedResponse = await this.parser.parse(responseContent);
