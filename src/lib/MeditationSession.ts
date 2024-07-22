@@ -264,7 +264,8 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       .insert({
         ts: new Date().toISOString(),
         meditation_id: this.meditationId,
-        instruction: instruction
+        elapsed_seconds: elapsedSeconds,
+        instruction: instruction,
       })
       .select('id');
 
@@ -272,7 +273,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
 
     if (data && data.length > 0 && 'id' in data[0]) {
       const instructionId = data[0].id;
-      console.log(`[${elapsedSeconds}s] Saved instruction ${instructionId} for meditation ${this.meditationId}: ${instruction}`);
+      console.log(`[${elapsedSeconds}s] [id:${this.meditationId}] Saved instruction ${instructionId}: ${instruction}`);
     } else {
       console.log(`[${elapsedSeconds}s] Failed to retrieve instruction ID after insertion for meditation ${this.meditationId}`);
     }

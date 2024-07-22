@@ -214,16 +214,19 @@ export interface Database {
           ts: string
           meditation_id: number
           instruction: string
+          elapsed_seconds: number
         }
         Insert: {
           ts: string
           meditation_id: number
           instruction: string
+          elapsed_seconds: number
         }
         Update: {
           ts?: string
           meditation_id?: number
           instruction?: string
+          elapsed_seconds?: number
         }
         Relationships: [
           {

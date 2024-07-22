@@ -200,6 +200,7 @@ CREATE TABLE meditation_instructions (
     id SERIAL PRIMARY KEY,
     ts TIMESTAMPTZ NOT NULL,
     meditation_id BIGINT NOT NULL,
+    elapsed_seconds INTEGER NOT NULL,
     instruction TEXT NOT NULL
 );
 
