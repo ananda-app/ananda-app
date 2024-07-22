@@ -5,7 +5,7 @@
   import { onMount } from "svelte"
 
   onMount(() => {
-    goto("/login/sign_in")
+    // goto("/login/sign_in")
   })
 
   export let data
