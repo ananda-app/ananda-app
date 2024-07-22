@@ -156,8 +156,8 @@ export class MeditationSession {
       
       this.startTime = Date.now();
 
-      console.log("in meditation session start before initialize encoding");
-      await this.initializeEncoding();
+      // console.log("in meditation session start before initialize encoding");
+      // await this.initializeEncoding();
 
       console.log("in meditation session start before get user info");
       const userInfo = await this.getUserInfo(this.session.user.id);
