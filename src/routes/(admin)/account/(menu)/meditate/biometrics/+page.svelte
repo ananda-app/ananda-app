@@ -3,7 +3,6 @@
   import { goto } from "$app/navigation"
   import { page } from "$app/stores"
   import BiometricsMonitor from "./BiometricsMonitor.svelte"
-  import type { RealtimeChannel } from "@supabase/supabase-js"
 
   export let data
   let { supabase } = data
@@ -12,16 +11,10 @@
 
   let audio: HTMLAudioElement
   let currentAudioPromise: Promise<void> | null = null
-  let channel: RealtimeChannel
   let wakeLock: WakeLockSentinel | null = null
-  let isConnected = false
-  let connectionError = ""
-  let retryCount = 0
-  const MAX_RETRIES = 3
-  const INITIAL_RETRY_DELAY = 2000 // 2 seconds
+  let pollingTimer: ReturnType<typeof setTimeout> | null = null
 
   async function requestWakeLock() {
-    console.log("Requesting Wake Lock...")
     try {
       wakeLock = await navigator.wakeLock.request("screen")
       console.log("Wake Lock is active")
@@ -31,7 +24,6 @@
   }
 
   function releaseWakeLock() {
-    console.log("Releasing Wake Lock...")
     if (wakeLock) {
       wakeLock.release().then(() => {
         wakeLock = null
@@ -40,90 +32,47 @@
     }
   }
 
-  async function initializeSession() {
-    console.log("Initializing session...")
-    await requestWakeLock()
-    try {
-      await establishConnection()
-      console.log("Connection established successfully")
-    } catch (error) {
-      console.error("Connection failed:", error)
-      if (retryCount < MAX_RETRIES) {
-        retryCount++
-        const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount - 1)
-        console.log(
-          `Retrying connection in ${delay}ms... Attempt ${retryCount}`,
-        )
-        await new Promise((resolve) => setTimeout(resolve, delay))
-        await initializeSession()
-      } else {
-        console.error("Max retries reached. Unable to establish connection.")
+  async function pollInstructions() {
+    // Fetch and play instructions
+    const { data, error } = await supabase
+      .from("meditation_instructions")
+      .select("*")
+      .eq("meditation_id", meditationId)
+      .is("play_ts", null)
+      .order("ts", { ascending: true })
+      .limit(1)
+
+    if (error) {
+      console.error("Error fetching instructions:", error)
+    } else if (data && data.length > 0) {
+      const instruction = data[0]
+      try {
+        const audioUrl = await fetchAudio(instruction.id)
+        currentAudioPromise = playAudio(audioUrl, instruction.id)
+        await currentAudioPromise
+      } catch (error) {
+        console.error("Failed to fetch or play audio:", error)
       }
     }
-  }
 
-  async function establishConnection(): Promise<void> {
-    console.log("Establishing connection...")
-    if (channel) {
-      await channel.unsubscribe()
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("meditation_sessions")
+      .select("end_ts")
+      .eq("id", meditationId)
+      .single()
+
+    if (sessionError) {
+      console.error("Error checking session:", sessionError)
+      console.log("Session data:", sessionData)
+    } else if (sessionData.end_ts !== null) {
+      endMeditation()
+      return
     }
 
-    channel = supabase.channel("schema-db-changes")
-
-    console.log("Channel created:", channel)
-
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public" },
-      handleDatabaseChanges,
-    )
-
-    return new Promise<void>((resolve, reject) => {
-      channel.subscribe((status) => {
-        console.log("Subscription status:", status)
-        if (status === "SUBSCRIBED") {
-          isConnected = true
-          resolve()
-        } else if (status === "CLOSED" || status === "TIMED_OUT") {
-          isConnected = false
-          reject(new Error(`Subscription failed: ${status}`))
-        }
-      })
-    })
-  }
-
-  async function handleDatabaseChanges(payload: any) {
-    console.log("Handling database changes:", payload)
-    if (payload.table === "meditation_instructions") {
-      if (
-        payload.new &&
-        payload.new.id &&
-        payload.new.meditation_id === meditationId &&
-        payload.new.play_ts === null
-      ) {
-        try {
-          console.log(`Received instruction: ${payload.new.instruction}`)
-          const audioUrl = await fetchAudio(payload.new.id)
-          playAudio(audioUrl, payload.new.id)
-        } catch (error) {
-          console.error("Failed to fetch or play audio:", error)
-        }
-      }
-    } else if (payload.table === "meditation_sessions") {
-      if (payload.new.end_ts !== null && payload.new.id === meditationId) {
-        console.log(`Stopping meditation ${meditationId} as end_ts updated`)
-        setTimeout(async () => {
-          if (currentAudioPromise) {
-            await currentAudioPromise
-          }
-          endMeditation()
-        }, 10000)
-      }
-    }
+    pollingTimer = setTimeout(pollInstructions, 5000)
   }
 
   async function fetchAudio(instructionId: string) {
-    console.log(`Fetching audio for instruction ID: ${instructionId}`)
     const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
     if (!response.ok) throw new Error("Failed to fetch audio")
     const blob = await response.blob()
@@ -134,63 +83,28 @@
     audioUrl: string,
     instructionId: number,
   ): Promise<void> {
-    console.log(`Playing audio from URL: ${audioUrl}`)
     if (audio) {
       audio.src = audioUrl
-      currentAudioPromise = new Promise((resolve) => {
+      return new Promise((resolve) => {
         audio.onended = async () => {
-          console.log("Audio playback ended")
           await updatePlayTimestamp(instructionId)
           resolve()
         }
+        audio.play()
       })
-      audio.play()
-      return currentAudioPromise
     }
     return Promise.resolve()
   }
 
   async function updatePlayTimestamp(instructionId: number) {
-    console.log(`Attempting to update play_ts for instruction ${instructionId}`)
     try {
-      // First, let's check if the instruction exists
-      const { data: existingData, error: existingError } = await supabase
-        .from("meditation_instructions")
-        .select("id")
-        .eq("id", instructionId)
-        .single()
-
-      if (existingError) {
-        console.error("Error checking for existing instruction:", existingError)
-        return
-      }
-
-      if (!existingData) {
-        console.warn(`Instruction with ID ${instructionId} does not exist`)
-        return
-      }
-
-      // If it exists, try to update it
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("meditation_instructions")
         .update({ play_ts: new Date().toISOString() })
         .eq("id", instructionId)
-        .select()
 
       if (error) {
         console.error("Error updating play_ts:", error)
-        return
-      }
-
-      if (data && data.length > 0) {
-        console.log(
-          `Updated play_ts for instruction ${instructionId}:`,
-          data[0],
-        )
-      } else {
-        console.warn(
-          `No rows updated for instruction ${instructionId} despite existing`,
-        )
       }
     } catch (error) {
       console.error("Failed to update play_ts:", error)
@@ -198,7 +112,6 @@
   }
 
   async function stopMeditation() {
-    console.log("Stopping meditation...")
     try {
       const response = await fetch("/account/meditate?/stop", {
         method: "POST",
@@ -223,30 +136,9 @@
   }
 
   function endMeditation() {
-    console.log("Ending meditation...")
     releaseWakeLock()
-    if (channel) {
-      channel.unsubscribe()
-    }
+    if (pollingTimer) clearTimeout(pollingTimer)
     goto("/account/meditate/thank-you")
-  }
-
-  async function checkSupabaseConnection() {
-    console.log("Checking Supabase connection...")
-    if (supabase) {
-      console.log("Supabase object exists")
-      try {
-        await supabase
-          .from("meditation_sessions")
-          .select("count", { count: "exact" })
-          .limit(1)
-        console.log("Supabase connection is working")
-      } catch (error: any) {
-        console.error("Supabase connection check failed:", error)
-      }
-    } else {
-      console.error("Supabase object is undefined")
-    }
   }
 
   function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -255,21 +147,16 @@
   }
 
   onMount(() => {
-    console.log("Component mounted")
-    checkSupabaseConnection()
-    initializeSession()
+    requestWakeLock()
+    pollInstructions()
     window.addEventListener("beforeunload", handleBeforeUnload)
   })
 
   onDestroy(() => {
-    console.log("Component being destroyed...")
     window.removeEventListener("beforeunload", handleBeforeUnload)
     stopMeditation()
-    if (channel) {
-      console.log("Unsubscribing from channel...")
-      channel.unsubscribe()
-    }
     releaseWakeLock()
+    if (pollingTimer) clearTimeout(pollingTimer)
   })
 </script>
 
@@ -279,24 +166,12 @@
 
 <div class="w-full max-w-md">
   <h1 class="text-2xl font-bold mb-6">Meditation Biometrics</h1>
-
-  {#if !isConnected}
-    {#if connectionError}
-      <p class="text-red-500">{connectionError}</p>
-      <button class="btn btn-primary mt-4" on:click={() => initializeSession()}>
-        Retry Connection
-      </button>
-    {:else}
-      <p>Establishing connection... Please wait.</p>
-    {/if}
-  {:else}
-    <BiometricsMonitor meditationId={meditationId.toString()} {supabase} />
-    <div class="w-full flex mt-4">
-      <button class="btn btn-error" on:click={stopMeditation}>
-        Stop Meditation
-      </button>
-    </div>
-  {/if}
+  <BiometricsMonitor meditationId={meditationId.toString()} {supabase} />
+  <div class="w-full flex mt-4">
+    <button class="btn btn-error" on:click={stopMeditation}>
+      Stop Meditation
+    </button>
+  </div>
 </div>
 
 <audio bind:this={audio}></audio>
