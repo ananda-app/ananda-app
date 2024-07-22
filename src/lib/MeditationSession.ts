@@ -155,7 +155,11 @@ export class MeditationSession {
       console.log("in meditation session start function");
       
       this.startTime = Date.now();
+
+      console.log("in meditation session start before initialize encoding");
       await this.initializeEncoding();
+
+      console.log("in meditation session start before get user info");
       const userInfo = await this.getUserInfo(this.session.user.id);
     
       const systemPrompt = `
@@ -212,6 +216,7 @@ ALWAYS respond in JSON format as described below:
 Ensure the JSON is valid and can be parsed by JSON.parse()
 `;
 
+      console.log("in meditation session start before ChatPromptTemplate.fromMessages");
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", systemPrompt.trim()],
         ["placeholder", "{chat_history}"],
@@ -229,6 +234,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         return chat_history.slice(-100);
       };
 
+      console.log("in meditation session start before RunnableSequence.from");
       const chain = RunnableSequence.from<{
         input: string;
         biometrics: string;
@@ -244,6 +250,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         this.llm
       ]);
 
+      console.log("in meditation session start before RunnableWithMessageHistory");
       this.withMessageHistory = new RunnableWithMessageHistory({
         runnable: chain,
         getMessageHistory: async (sessionId) => this.messageHistory,
