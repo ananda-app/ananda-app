@@ -1,11 +1,9 @@
-import { sveltekit } from '@sveltejs/kit/vite';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { sveltekit } from "@sveltejs/kit/vite"
+import { defineConfig } from "vitest/config"
 
-export default {
-  plugins: [
-    sveltekit(),
-    nodePolyfills({
-      include: ['assert', 'events', 'url', 'os', 'path', 'fs']
-    })
-  ]
-};
+export default defineConfig({
+  plugins: [sveltekit()],
+  test: {
+    include: ["src/*/.{test,spec}.{js,ts}"],
+  },
+})

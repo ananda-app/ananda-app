@@ -3,7 +3,6 @@ import type { Actions } from './$types';
 import { RESEND_API_KEY, APP_URL } from '$env/static/private';
 import { Resend } from 'resend';
 import Mustache from 'mustache';
-import inlineCss from 'inline-css';
 import emailTemplates from '$lib/emailTemplates';
 import { checkUserExists } from '$lib/supabaseHelpers';
 
@@ -84,15 +83,13 @@ export const actions: Actions = {
 
       const renderedHtml = Mustache.render(emailTemplate.html, templateData);
 
-      const inlinedHtml = await inlineCss(renderedHtml, { url: ' ' });
-
       // Send the invitation email using Resend
       const { data, error: emailError } = await resend.emails.send({
         from: 'Ananda <support@ananda.app>',
         to: recipientEmail,
         reply_to: recipientEmail,
         subject: emailTemplate.subject,
-        html: inlinedHtml
+        html: renderedHtml
       })
 
       if (emailError) throw emailError
