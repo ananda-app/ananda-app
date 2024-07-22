@@ -86,12 +86,14 @@ User Comments:
 ${comments ? comments.trim() : 'None'}
 
 Grounding Stage Instructions:
-- Greet the user and provide instructions sit in a comfortable posture, look straight, take few deep breaths and close the eyes.
-- Ask the user to set an intention to sit still.
+- Greet the user and provide instructions sit in a comfortable posture and look straight at the camera.
+- Instruct the user to take few deep breaths and close the eyes when ready.
+- Ask the user to set an intention to sit as still as possible.
+- Inform that you'll monitor the biometrics and provide further instructions.
 
 Immersion Stage Instructions:
-- Start by providing instructions for the ${this.method} method.
-- Monitor the stats and assess the mental state of the user.
+- Start by providing instructions for the ${this.method} meditation technique.
+- Assess the mental state of the user based on the biometrics.
 - If user seems to have lost focus, then provide a gentle reminder to return to the object of focus. 
 - Do not provide any instruction if the user is focussed.
 - Keep cycling through the instructions till the stage is over.
@@ -102,7 +104,7 @@ Closure Stage Instructions:
 - Ask user to rub the hands together, place the palms on the eyes and open it.
 - Summaize the biometrics observed during the session and provide feedback.
 - Ask the user to try and keep practicing it for the rest of the day. 
-- End this stage with a goodbye.
+- End this stage with a goodbye till the next session.
 
 ALWAYS respond in JSON format as described below:
 {{

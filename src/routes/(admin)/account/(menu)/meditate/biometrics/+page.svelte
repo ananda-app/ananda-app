@@ -116,7 +116,7 @@
             await currentAudioPromise
           }
           endMeditation()
-        }, 5000)
+        }, 10000)
       }
     }
   }
