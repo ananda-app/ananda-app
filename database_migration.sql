@@ -201,7 +201,8 @@ CREATE TABLE meditation_instructions (
     ts TIMESTAMPTZ NOT NULL,
     meditation_id BIGINT NOT NULL,
     elapsed_seconds INTEGER NOT NULL,
-    instruction TEXT NOT NULL
+    instruction TEXT NOT NULL,
+    play_ts TIMESTAMPTZ
 );
 
 SELECT create_hypertable('meditation_instructions', 'ts');
@@ -217,6 +218,25 @@ CREATE POLICY public_select ON public.meditation_instructions
 FOR SELECT
 USING (true);    
 
+CREATE POLICY "allow_update_meditation_instructions_by_meditation_id" 
+ON "public"."meditation_instructions"
+AS PERMISSIVE FOR UPDATE
+TO authenticated
+USING (
+  meditation_id IN (
+    SELECT id 
+    FROM meditation_sessions 
+    WHERE user_id = auth.uid()
+  )
+)
+WITH CHECK (
+  meditation_id IN (
+    SELECT id 
+    FROM meditation_sessions 
+    WHERE user_id = auth.uid()
+  )
+);
+
 ALTER TABLE public.meditation_instructions
 ADD CONSTRAINT fk_meditation_session
 FOREIGN KEY (meditation_id) 
@@ -226,3 +246,4 @@ ALTER TABLE public.biometrics
 ADD CONSTRAINT fk_meditation_session
 FOREIGN KEY (meditation_id) 
 REFERENCES public.meditation_sessions(id);
+

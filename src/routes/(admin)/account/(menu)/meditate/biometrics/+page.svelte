@@ -98,12 +98,13 @@
       if (
         payload.new &&
         payload.new.id &&
-        payload.new.meditation_id === meditationId
+        payload.new.meditation_id === meditationId &&
+        payload.new.play_ts === null
       ) {
         try {
           console.log(`Received instruction: ${payload.new.instruction}`)
           const audioUrl = await fetchAudio(payload.new.id)
-          playAudio(audioUrl)
+          playAudio(audioUrl, payload.new.id)
         } catch (error) {
           console.error("Failed to fetch or play audio:", error)
         }
@@ -129,13 +130,17 @@
     return URL.createObjectURL(blob)
   }
 
-  function playAudio(audioUrl: string): Promise<void> {
+  async function playAudio(
+    audioUrl: string,
+    instructionId: number,
+  ): Promise<void> {
     console.log(`Playing audio from URL: ${audioUrl}`)
     if (audio) {
       audio.src = audioUrl
       currentAudioPromise = new Promise((resolve) => {
-        audio.onended = () => {
+        audio.onended = async () => {
           console.log("Audio playback ended")
+          await updatePlayTimestamp(instructionId)
           resolve()
         }
       })
@@ -143,6 +148,53 @@
       return currentAudioPromise
     }
     return Promise.resolve()
+  }
+
+  async function updatePlayTimestamp(instructionId: number) {
+    console.log(`Attempting to update play_ts for instruction ${instructionId}`)
+    try {
+      // First, let's check if the instruction exists
+      const { data: existingData, error: existingError } = await supabase
+        .from("meditation_instructions")
+        .select("id")
+        .eq("id", instructionId)
+        .single()
+
+      if (existingError) {
+        console.error("Error checking for existing instruction:", existingError)
+        return
+      }
+
+      if (!existingData) {
+        console.warn(`Instruction with ID ${instructionId} does not exist`)
+        return
+      }
+
+      // If it exists, try to update it
+      const { data, error } = await supabase
+        .from("meditation_instructions")
+        .update({ play_ts: new Date().toISOString() })
+        .eq("id", instructionId)
+        .select()
+
+      if (error) {
+        console.error("Error updating play_ts:", error)
+        return
+      }
+
+      if (data && data.length > 0) {
+        console.log(
+          `Updated play_ts for instruction ${instructionId}:`,
+          data[0],
+        )
+      } else {
+        console.warn(
+          `No rows updated for instruction ${instructionId} despite existing`,
+        )
+      }
+    } catch (error) {
+      console.error("Failed to update play_ts:", error)
+    }
   }
 
   async function stopMeditation() {
