@@ -249,6 +249,8 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       historyMessagesKey: "chat_history",
     });
 
+    console.log(`Starting meditation session with ID: ${this.meditationId}`);
+
     await this.runLLM();
     this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
   }
@@ -345,7 +347,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         { configurable: { sessionId: this.meditationId.toString() } }
       );
   
-      //console.log(`Attempt ${retryAttempt + 1} - LLM Response:`, response.content);
+      console.log(`Attempt ${retryAttempt + 1} - LLM Response:`, response.content);
   
       const responseContent = Array.isArray(response.content) ? response.content.join('') : response.content ?? '';
       const parsedResponse = await this.parser.parse(responseContent);
