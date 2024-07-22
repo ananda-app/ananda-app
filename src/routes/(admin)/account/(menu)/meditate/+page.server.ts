@@ -67,7 +67,7 @@ export const actions: Actions = {
         "gpt-4o-mini"
       );
 
-      meditationSession.start();
+      await meditationSession.start();
 
       console.log(`Successfully started ${method} meditation ${meditationId} with comments: ${comments}`);
       

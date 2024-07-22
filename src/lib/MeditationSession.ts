@@ -261,7 +261,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
       console.log(`Starting meditation session with ID: ${this.meditationId}`);
 
       await this.runLLM();
-      this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
+      //this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
     } catch (error) {
       console.error(`Error starting meditation session with ID: ${this.meditationId}`, error);
       throw error;
