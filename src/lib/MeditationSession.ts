@@ -152,14 +152,8 @@ export class MeditationSession {
 
   async start() {
     try {
-      console.log("in meditation session start function");
-      
       this.startTime = Date.now();
-
-      // console.log("in meditation session start before initialize encoding");
-      // await this.initializeEncoding();
-
-      console.log("in meditation session start before get user info");
+      await this.initializeEncoding();
       const userInfo = await this.getUserInfo(this.session.user.id);
     
       const systemPrompt = `
@@ -216,7 +210,6 @@ ALWAYS respond in JSON format as described below:
 Ensure the JSON is valid and can be parsed by JSON.parse()
 `;
 
-      console.log("in meditation session start before ChatPromptTemplate.fromMessages");
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", systemPrompt.trim()],
         ["placeholder", "{chat_history}"],
@@ -234,7 +227,6 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         return chat_history.slice(-100);
       };
 
-      console.log("in meditation session start before RunnableSequence.from");
       const chain = RunnableSequence.from<{
         input: string;
         biometrics: string;
@@ -250,18 +242,12 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         this.llm
       ]);
 
-      console.log("in meditation session start before RunnableWithMessageHistory");
       this.withMessageHistory = new RunnableWithMessageHistory({
         runnable: chain,
         getMessageHistory: async (sessionId) => this.messageHistory,
         inputMessagesKey: "input",
         historyMessagesKey: "chat_history",
       });
-
-      console.log(`Starting meditation session with ID: ${this.meditationId}`);
-
-      await this.runLLM();
-      //this.intervalId = setInterval(() => this.runLLM(), 60000); // Run every 1 minute
     } catch (error) {
       console.error(`Error starting meditation session with ID: ${this.meditationId}`, error);
       throw error;
@@ -326,7 +312,7 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
     }
   }
 
-  private async runLLM(retryAttempt: number = 0, errorMessage: string = ""): Promise<void> {
+  public async runLLM(retryAttempt: number = 0, errorMessage: string = ""): Promise<void> {
     const MAX_RETRIES = 3;
   
     try {

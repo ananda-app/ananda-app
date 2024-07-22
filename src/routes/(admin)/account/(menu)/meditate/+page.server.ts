@@ -1,4 +1,4 @@
-import { fail, redirect } from "@sveltejs/kit";
+import { fail, redirect, json } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { MeditationSession } from "$lib/MeditationSession";
 
@@ -80,6 +80,44 @@ export const actions: Actions = {
       throw redirect(303, "/account/meditate/oops");
     }
   },
+
+  'run-llm': async ({ request, locals: { safeGetSession } }) => {
+    const { session } = await safeGetSession();
+    if (!session) {
+      return fail(401, { error: "Unauthorized" });
+    }
+  
+    const formData = await request.formData();
+    const meditationId = Number(formData.get('meditationId'));
+  
+    if (!meditationId) {
+      return fail(400, { error: "Meditation ID is required" });
+    }
+  
+    const meditationSession = MeditationSession.getSession(meditationId);
+  
+    if (meditationSession) {
+      try {
+        await meditationSession.runLLM();
+        console.log(`Successfully ran LLM for meditation ${meditationId}`);
+        return {
+          success: true
+        };
+      } catch (error) {
+        console.error("Error running LLM:", error);
+        return {
+          success: false,
+          error: "Failed to run LLM"
+        };
+      }
+    } else {
+      console.log(`MeditationSession instance for ${meditationId} not found`);
+      return fail(404, {
+        success: false,
+        error: "Meditation session not found"
+      });
+    }
+  },  
 
   stop: async ({ request, locals: { supabase, safeGetSession } }) => {
     const { session } = await safeGetSession();

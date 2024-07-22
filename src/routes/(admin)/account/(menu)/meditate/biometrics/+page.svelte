@@ -12,7 +12,7 @@
   let audio: HTMLAudioElement
   let currentAudioPromise: Promise<void> | null = null
   let wakeLock: WakeLockSentinel | null = null
-  let pollingTimer: ReturnType<typeof setTimeout> | null = null
+  let pollingInterval: ReturnType<typeof setInterval> | null = null
 
   async function requestWakeLock() {
     try {
@@ -33,6 +33,30 @@
   }
 
   async function pollInstructions() {
+    try {
+      const response = await fetch("/account/meditate?/run-llm", {
+        method: "POST",
+        body: new URLSearchParams({ meditationId: meditationId.toString() }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        if (!result.success) {
+          console.error("LLM processing failed:", result.error)
+        }
+      } else {
+        console.error("HTTP error:", response.status, result.error)
+        if (response.status === 401) {
+          goto("/login/sign_in")
+        } else if (response.status === 404) {
+          goto("/account/meditate/oops")
+        }
+      }
+    } catch (error) {
+      console.error("Network or parsing error:", error)
+    }
+
     // Fetch and play instructions
     const { data, error } = await supabase
       .from("meditation_instructions")
@@ -68,8 +92,6 @@
       endMeditation()
       return
     }
-
-    pollingTimer = setTimeout(pollInstructions, 5000)
   }
 
   async function fetchAudio(instructionId: string) {
@@ -137,7 +159,6 @@
 
   function endMeditation() {
     releaseWakeLock()
-    if (pollingTimer) clearTimeout(pollingTimer)
     goto(`/account/meditate/thank-you?id=${meditationId}`)
   }
 
@@ -149,6 +170,7 @@
   onMount(() => {
     requestWakeLock()
     pollInstructions()
+    pollingInterval = setInterval(pollInstructions, 60000)
     window.addEventListener("beforeunload", handleBeforeUnload)
   })
 
@@ -156,7 +178,7 @@
     window.removeEventListener("beforeunload", handleBeforeUnload)
     stopMeditation()
     releaseWakeLock()
-    if (pollingTimer) clearTimeout(pollingTimer)
+    if (pollingInterval) clearInterval(pollingInterval)
   })
 </script>
 
