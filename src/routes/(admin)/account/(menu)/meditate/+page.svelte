@@ -3,7 +3,6 @@
   import { goto } from "$app/navigation"
   import { getContext } from "svelte"
   import type { ActionResult } from "@sveltejs/kit"
-  import { formatTechnique } from "$lib/formatUtils"
   import type { Writable } from "svelte/store"
 
   let adminSection: Writable<string> = getContext("adminSection")
@@ -75,13 +74,9 @@
             class="select select-bordered w-full"
             required
           >
-            <option value="loving_kindness"
-              >{formatTechnique("loving_kindness")}</option
-            >
-            <option value="breath_focus"
-              >{formatTechnique("breath_focus")}</option
-            >
-            <option value="body_scan">{formatTechnique("body_scan")}</option>
+            <option>Loving Kindness</option>
+            <option>Breath Counting</option>
+            <option>Body Scan</option>
           </select>
         </div>
 

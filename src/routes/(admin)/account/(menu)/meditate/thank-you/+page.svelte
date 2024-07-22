@@ -11,7 +11,7 @@
   <p class="mb-4">
     Great job! You have successfully completed your meditation session.
   </p>
-  <button class="btn btn-primary" on:click={() => goto("/account/meditate")}>
-    Start Another Session
+  <button class="btn btn-primary" on:click={() => goto("/account/history")}>
+    Check Stats
   </button>
 </div>
