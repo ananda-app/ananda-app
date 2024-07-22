@@ -141,12 +141,18 @@
         }),
       })
       if (response.ok) {
-        endMeditation()
+        const result = await response.json()
+        if (result.success && result.redirect) {
+          goto(result.redirect)
+        } else {
+          endMeditation()
+        }
       } else {
         throw new Error("Failed to stop meditation")
       }
     } catch (err) {
       console.error("Error stopping meditation:", err)
+      goto("/account/meditate/oops")
     }
   }
 
@@ -177,14 +183,23 @@
     }
   }
 
+  function handleBeforeUnload(event: BeforeUnloadEvent) {
+    stopMeditation()
+    event.preventDefault()
+    event.returnValue = ""
+  }
+
   onMount(() => {
     console.log("Component mounted")
     checkSupabaseConnection()
     initializeSession()
+    window.addEventListener("beforeunload", handleBeforeUnload)
   })
 
   onDestroy(() => {
     console.log("Component being destroyed...")
+    window.removeEventListener("beforeunload", handleBeforeUnload)
+    stopMeditation()
     if (channel) {
       console.log("Unsubscribing from channel...")
       channel.unsubscribe()

@@ -86,28 +86,37 @@ export const actions: Actions = {
     if (!session) {
       return fail(401, { error: "Unauthorized" });
     }
-
+  
     const formData = await request.formData();
     const meditationId = Number(formData.get('meditationId'));
-
+  
     if (!meditationId) {
       return fail(400, { error: "Meditation ID is required" });
     }
-
+  
     const meditationSession = MeditationSession.getSession(meditationId);
-
+  
     if (meditationSession) {
       try {
         await meditationSession.endSession(true);
         console.log(`Successfully stopped meditation ${meditationId}`);
-        return redirect(303, "/account/meditate/thank-you");
+        return {
+          success: true,
+          redirect: `/account/meditate/thank-you?id=${meditationId}`
+        };
       } catch (error) {
         console.error("Error stopping meditation:", error);
-        throw redirect(303, "/account/meditate/oops");
+        return {
+          success: false,
+          redirect: "/account/meditate/oops"
+        };
       }
     } else {
       console.log(`MeditationSession instance for ${meditationId} not found`);
-      throw redirect(303, "/account/meditate/oops");
+      return {
+        success: false,
+        redirect: "/account/meditate/oops"
+      };
     }
   }
 };
