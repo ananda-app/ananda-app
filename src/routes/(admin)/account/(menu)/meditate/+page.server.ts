@@ -118,14 +118,14 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
         stage_suffix = "Move to the closure stage.";
     }
 
-    userMessage = `
-Here are the biometrics for the last minute:
-${biometrics}
-
-Time left in session: ${timeLeft} seconds. ${stage_suffix}
-
-Respond as per the JSON format specified:
-`;
+    userMessage = [
+      "Here are the biometrics for the last minute:",
+      biometrics,
+      "",
+      `Time left in session: ${timeLeft} seconds. ${stage_suffix}`,
+      "",
+      "Respond as per the JSON format specified:"
+    ].join("\n");
 
     // Rebuild chat history
     messages = chatHistory.flatMap(msg => [
@@ -249,11 +249,15 @@ export const actions: Actions = {
 
       if (meditationError) {
         if (meditationError.code === 'PGRST116') {
-          return fail(404, { error: "Meditation session not found" });
+          return fail(404, { error: `Meditation session ${meditationId} not found` });
         }
         throw meditationError;
       }
 
+      if (meditationData.end_ts !== null) {
+        throw new Error(`Meditation session ${meditationId} has already ended`);
+      }
+  
       // Fetch user info
       const { data: userData, error: userError } = await supabase
         .from('profiles')
@@ -281,7 +285,7 @@ export const actions: Actions = {
         .from('biometrics')
         .select('*')
         .eq('meditation_id', meditationId)
-        .order('ts', { ascending: false })
+        .order('ts', { ascending: true })
         .limit(24);
 
       if (biometricsError) throw biometricsError;
@@ -329,7 +333,7 @@ export const actions: Actions = {
 
       if (insertError) throw insertError;
 
-      console.log(`[${elapsedSeconds}s] [id:${meditationId}] [${insertedInstruction.id}]: ${instruction}`);
+      console.log(`[${elapsedSeconds}s] [id:${meditationId}] [mid:${insertedInstruction.id}]: ${instruction}`);
 
       return { success: true };
     } catch (error) {

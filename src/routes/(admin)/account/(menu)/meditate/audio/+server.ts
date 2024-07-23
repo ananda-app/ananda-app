@@ -45,8 +45,6 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
   try {
     const audioBuffer = await textToSpeech(data.instruction);
     
-    console.log(`Sending audio for instruction: ${instructionId}`);
-
     return new Response(audioBuffer, {
       headers: {
         'Content-Type': 'audio/mpeg',
