@@ -208,7 +208,13 @@ CREATE TABLE meditation_instructions (
     PRIMARY KEY (id, ts)
 );
 
-SELECT create_hypertable('meditation_instructions', 'ts');
+ALTER TABLE "public"."meditation_instructions" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anonymous access"
+ON "public"."meditation_instructions"
+FOR SELECT
+TO anon
+USING (true);
 
 CREATE INDEX ON meditation_instructions (meditation_id, ts DESC);
 
