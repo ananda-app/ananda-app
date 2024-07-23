@@ -250,3 +250,35 @@ ADD CONSTRAINT fk_meditation_session
 FOREIGN KEY (meditation_id) 
 REFERENCES public.meditation_sessions(id);
 
+create table chat_history (
+  id serial primary key,
+  meditation_id integer not null,
+  user_message text not null,
+  ai_message text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS on the chat_history table
+ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
+
+-- Policy for reading chat history
+CREATE POLICY read_own_chat_history ON chat_history
+FOR SELECT
+USING (
+  meditation_id IN (
+    SELECT id 
+    FROM meditation_sessions 
+    WHERE user_id = auth.uid()
+  )
+);
+
+-- Policy for inserting chat history
+CREATE POLICY insert_own_chat_history ON chat_history
+FOR INSERT
+WITH CHECK (
+  meditation_id IN (
+    SELECT id 
+    FROM meditation_sessions 
+    WHERE user_id = auth.uid()
+  )
+);

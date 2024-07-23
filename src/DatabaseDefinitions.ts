@@ -217,6 +217,7 @@ export interface Database {
       },
       meditation_instructions: {
         Row: {
+          id: number
           ts: string
           meditation_id: number
           instruction: string
@@ -231,6 +232,7 @@ export interface Database {
           play_ts?: string | null
         }
         Update: {
+          id?: number
           ts?: string
           meditation_id?: number
           instruction?: string
@@ -245,7 +247,38 @@ export interface Database {
             referencedColumns: ["id"]
           }
         ]
-      },          
+      },
+      chat_history: {
+        Row: {
+          id: number
+          meditation_id: number
+          user_message: string
+          ai_message: string
+          created_at: string
+        }
+        Insert: {
+          id?: number 
+          meditation_id: number
+          user_message: string
+          ai_message: string
+          created_at?: string 
+        }
+        Update: {
+          id?: number
+          meditation_id?: number
+          user_message?: string
+          ai_message?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_history_meditation_id_fkey"
+            columns: ["meditation_id"]
+            referencedRelation: "meditation_sessions"
+            referencedColumns: ["id"]
+          }
+        ]
+      },               
     }
     Views: {
       [_ in never]: never

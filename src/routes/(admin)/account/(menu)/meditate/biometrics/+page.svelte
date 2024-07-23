@@ -34,22 +34,23 @@
 
   async function pollInstructions() {
     try {
-      const response = await fetch("/account/meditate?/run-llm", {
+      const response = await fetch("/account/meditate?/instr", {
         method: "POST",
         body: new URLSearchParams({ meditationId: meditationId.toString() }),
       })
 
-      const result = await response.json()
-
+      // Check if the response is ok (status in the range 200-299)
       if (response.ok) {
-        if (!result.success) {
-          console.error("LLM processing failed:", result.error)
+        const result = await response.json()
+
+        if (result.type !== "success") {
+          console.error("LLM processing failed")
         }
       } else {
-        console.error("HTTP error:", response.status, result.error)
+        // Handle non-OK responses
         if (response.status === 401) {
           goto("/login/sign_in")
-        } else if (response.status === 404) {
+        } else {
           goto("/account/meditate/oops")
         }
       }
