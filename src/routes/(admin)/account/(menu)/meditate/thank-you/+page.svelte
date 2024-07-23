@@ -78,3 +78,10 @@
     </button>
   </form>
 </div>
+
+<p class="mt-4">
+  You can also
+  <a href="/account/meditate" class="link link-primary">Start New Session</a>
+  or
+  <a href="/account/history" class="link link-primary">Check History</a>
+</p>
