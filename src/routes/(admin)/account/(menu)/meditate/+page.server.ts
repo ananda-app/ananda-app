@@ -9,7 +9,6 @@ import { OPENAI_API_KEY } from '$env/static/private';
 
 interface MeditationResponse {
   thoughts: {
-    id: string;
     stage: string;
     seconds_left: number;
     biometric_analysis: string;
@@ -40,7 +39,7 @@ async function generate_instruction(
   const parser = new JsonOutputParser<MeditationResponse>();
 
   const systemPrompt = `
-As a meditation guru, your task is to conduct a ${method} meditation session of ${durationSeconds} seconds using the biometric stats as a guide. The ID of this session is ${meditationId}.
+As a meditation guru, your task is to conduct a ${method} meditation session of ${durationSeconds} seconds using the biometric stats as a guide.
 Conduct the session in three stages: grounding, immersion, and closure. Instructions for each stage are detailed below. Move to the next stage ONLY when instructed.
 The biometric stats are estimated from the live video feed using the rPPG algorithm. Infer the mental/physical state of the user from the data. Invalid values may indicate incorrect posture.
 Think step by step. Base your decisions on the biometric stats and your assessment of the user's mental state.
@@ -79,7 +78,6 @@ Closure Stage Instructions:
 ALWAYS respond in JSON format as described below:
 {
   "thoughts": {
-    "id": "id of this session",
     "stage": "stage of meditation",
     "seconds_left": "seconds left in session",
     "biometric_analysis": "analysis of the biometric stats",
@@ -112,11 +110,19 @@ Ensure the JSON is valid and can be parsed by JSON.parse()
   if (chatHistory.length === 0) {
     userMessage = "Start with grounding instructions. Respond as per the JSON format specified:";
   } else {
+    let stage_suffix = "Stay in the immersion stage.";
+    if (elapsedSeconds > 60) {
+        stage_suffix = "Move to the immersion stage.";
+    }
+    if(timeLeft <= 0) {
+        stage_suffix = "Move to the closure stage.";
+    }
+
     userMessage = `
 Here are the biometrics for the last minute:
 ${biometrics}
 
-Time left in session: ${timeLeft} seconds. ${elapsedSeconds > 60 ? "Move to the immersion stage." : timeLeft <= 0 ? "Move to the closure stage." : "Stay in the immersion stage."}
+Time left in session: ${timeLeft} seconds. ${stage_suffix}
 
 Respond as per the JSON format specified:
 `;
@@ -137,7 +143,6 @@ Respond as per the JSON format specified:
   const chain = prompt.pipe(llm).pipe(parser);
 
   const response = await chain.invoke({});
-  console.log(response);
 
   // Save user message and AI message to chat_history table in the same row
   const { error: chatInsertError } = await supabase
@@ -324,7 +329,7 @@ export const actions: Actions = {
 
       if (insertError) throw insertError;
 
-      console.log(`[${elapsedSeconds}s] [id:${meditationId}] Saved instruction ${insertedInstruction.id}: ${instruction}`);
+      console.log(`[${elapsedSeconds}s] [id:${meditationId}] [${insertedInstruction.id}]: ${instruction}`);
 
       return { success: true };
     } catch (error) {

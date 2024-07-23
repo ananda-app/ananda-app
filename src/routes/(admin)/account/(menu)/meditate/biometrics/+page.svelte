@@ -71,27 +71,40 @@
       console.error("Error fetching instructions:", error)
     } else if (data && data.length > 0) {
       const instruction = data[0]
-      try {
-        const audioUrl = await fetchAudio(instruction.id)
-        currentAudioPromise = playAudio(audioUrl, instruction.id)
-        await currentAudioPromise
-      } catch (error) {
-        console.error("Failed to fetch or play audio:", error)
+      if (instruction.instruction.trim().length > 0) {
+        try {
+          const audioUrl = await fetchAudio(instruction.id)
+          currentAudioPromise = playAudio(audioUrl, instruction.id)
+          await currentAudioPromise
+        } catch (error) {
+          console.error("Failed to fetch or play audio:", error)
+        }
+      } else {
+        console.error("Instruction is empty")
       }
     }
 
     const { data: sessionData, error: sessionError } = await supabase
       .from("meditation_sessions")
-      .select("end_ts")
+      .select("start_ts, duration")
       .eq("id", meditationId)
       .single()
 
     if (sessionError) {
       console.error("Error checking session:", sessionError)
       console.log("Session data:", sessionData)
-    } else if (sessionData.end_ts !== null) {
-      endMeditation()
-      return
+    } else if (sessionData) {
+      const startTime = new Date(sessionData.start_ts).getTime()
+      const currentTime = new Date().getTime()
+      const elapsedTimeMinutes = (currentTime - startTime) / (60 * 1000) // Convert to minutes
+
+      if (elapsedTimeMinutes >= sessionData.duration) {
+        console.log(
+          `Ending session as elapsed time (${elapsedTimeMinutes} minutes) has reached or exceeded the duration (${sessionData.duration} minutes)`,
+        )
+        endMeditation()
+        return
+      }
     }
   }
 
