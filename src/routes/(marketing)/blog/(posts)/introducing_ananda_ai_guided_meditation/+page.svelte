@@ -56,8 +56,8 @@
 <h3>Enter Ananda: Your AI Meditation Buddy</h3>
 
 <p>
-  So, I put on my developer hat and created Ananda (with lots of help from
-  Calude.ai!). Here's the cool part:
+  So, I put on my developer hat and created Ananda (shoutout to Claude!). Here's
+  the cool part:
 </p>
 
 <ol>
