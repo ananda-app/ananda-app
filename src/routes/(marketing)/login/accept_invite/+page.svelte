@@ -60,23 +60,49 @@
     error = ""
 
     try {
-      const { error: signUpError } = await data.supabase.auth.signUp({
-        email: invitedEmail,
-        password: password,
-        options: {
-          data: { invite_token: inviteToken },
-        },
-      })
+      // First, sign up the user
+      const { data: signUpData, error: signUpError } =
+        await data.supabase.auth.signUp({
+          email: invitedEmail,
+          password: password,
+          options: {
+            data: {
+              invite_token: inviteToken,
+            },
+          },
+        })
 
       if (signUpError) throw signUpError
 
-      await data.supabase
-        .from("invitations")
-        .update({ accepted: true })
-        .eq("token", inviteToken)
+      if (signUpData.user) {
+        // Confirm the email using RPC
+        const { data: confirmData, error: confirmError } = await (
+          data.supabase.rpc as any
+        )("confirm_user_email", { user_id: signUpData.user.id })
 
-      goto("/account")
+        if (confirmError) throw confirmError
+
+        // Update the invitation status
+        const { error: inviteUpdateError } = await data.supabase
+          .from("invitations")
+          .update({ accepted: true })
+          .eq("token", inviteToken)
+
+        if (inviteUpdateError) throw inviteUpdateError
+
+        // Sign in the user
+        const { error: signInError } =
+          await data.supabase.auth.signInWithPassword({
+            email: invitedEmail,
+            password: password,
+          })
+
+        if (signInError) throw signInError
+
+        goto("/account")
+      }
     } catch (e: any) {
+      console.log(e)
       error = e.message || "An error occurred during sign up."
     } finally {
       loading = false
