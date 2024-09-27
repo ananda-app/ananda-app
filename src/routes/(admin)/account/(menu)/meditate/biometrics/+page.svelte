@@ -9,9 +9,9 @@
 
   $: meditationId = Number($page.url.searchParams.get("id"))
 
-  let currentAudioPromise: Promise<void> | null = null
   let wakeLock: WakeLockSentinel | null = null
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
+  let instructionTimer: ReturnType<typeof setTimeout> | null = null
+  let currentAudio: HTMLAudioElement | null = null
 
   async function requestWakeLock() {
     try {
@@ -31,7 +31,7 @@
     }
   }
 
-  async function pollInstructions() {
+  async function next_instruction() {
     try {
       const response = await fetch("/account/meditate/instruction", {
         method: "POST",
@@ -47,7 +47,7 @@
         const { instruction, audioBase64, instructionId, timeLeft } =
           result.data
 
-        console.log(`[${meditationId}] [${timeLeft}]: ${instruction}`)
+        console.log(`[id:${instructionId}] [${timeLeft}s]: ${instruction}`)
 
         // Convert base64 to ArrayBuffer
         const binaryString = atob(audioBase64)
@@ -59,16 +59,19 @@
         const buffer = bytes.buffer
 
         // Play the audio
-        await playAudio(buffer, instruction, instructionId)
+        await playAudio(buffer, instructionId)
 
         // Check if the meditation session should end
         if (timeLeft <= 0) {
           console.log(
-            `Ending session as time left (${timeLeft} seconds) is over`,
+            `Ending session for meditation ID ${meditationId} as time left is ${timeLeft}s`,
           )
           await stopMeditation() // This will update the database and call endMeditation
           return
         }
+
+        // Schedule the next instruction after 60 seconds
+        instructionTimer = setTimeout(next_instruction, 60000)
       } else if (result.type === "error") {
         console.error("Instruction generation failed:", result.data.error)
         if (result.data.redirect) {
@@ -83,31 +86,48 @@
     }
   }
 
+  function clearInstructionTimer() {
+    if (instructionTimer) {
+      clearTimeout(instructionTimer)
+      instructionTimer = null
+      console.log(`Timer cleared for meditation ${meditationId}`)
+    }
+  }
+
   async function playAudio(
     audioBuffer: ArrayBuffer,
-    instruction: string,
     instructionId: number,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const blob = new Blob([audioBuffer], { type: "audio/mp3" })
       const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
 
-      audio.onended = async () => {
+      // Stop any currently playing audio
+      if (currentAudio) {
+        currentAudio.pause()
+        currentAudio.currentTime = 0
+      }
+
+      currentAudio = new Audio(url)
+
+      currentAudio.onended = async () => {
         URL.revokeObjectURL(url)
         await updatePlayTimestamp(instructionId)
+        currentAudio = null
         resolve()
       }
 
-      audio.onerror = (err) => {
+      currentAudio.onerror = (err) => {
         console.error("Error playing audio:", err)
         URL.revokeObjectURL(url)
+        currentAudio = null
         reject(err)
       }
 
-      audio.play().catch((error) => {
+      currentAudio.play().catch((error) => {
         console.error("Error starting audio playback:", error)
         URL.revokeObjectURL(url)
+        currentAudio = null
         reject(error)
       })
     })
@@ -129,6 +149,15 @@
   }
 
   async function stopMeditation() {
+    clearInstructionTimer()
+
+    // Stop any currently playing audio
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio.currentTime = 0
+      currentAudio = null
+    }
+
     try {
       const { error } = await supabase
         .from("meditation_sessions")
@@ -159,9 +188,9 @@
   }
 
   onMount(() => {
+    console.log(`Starting meditation id ${meditationId}`)
     requestWakeLock()
-    pollInstructions()
-    pollingInterval = setInterval(pollInstructions, 60000)
+    next_instruction() // Start the instruction cycle
     window.addEventListener("beforeunload", handleBeforeUnload)
   })
 
@@ -169,7 +198,6 @@
     window.removeEventListener("beforeunload", handleBeforeUnload)
     stopMeditation()
     releaseWakeLock()
-    if (pollingInterval) clearInterval(pollingInterval)
   })
 </script>
 
