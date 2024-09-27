@@ -9,7 +9,6 @@
 
   $: meditationId = Number($page.url.searchParams.get("id"))
 
-  let audio: HTMLAudioElement
   let currentAudioPromise: Promise<void> | null = null
   let wakeLock: WakeLockSentinel | null = null
   let pollingInterval: ReturnType<typeof setInterval> | null = null
@@ -34,102 +33,84 @@
 
   async function pollInstructions() {
     try {
-      const response = await fetch("/account/meditate?/instr", {
+      const response = await fetch("/account/meditate/instruction", {
         method: "POST",
-        body: new URLSearchParams({ meditationId: meditationId.toString() }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ meditationId }),
       })
 
-      // Check if the response is ok (status in the range 200-299)
-      if (response.ok) {
-        const result = await response.json()
+      const result = await response.json()
 
-        if (result.type !== "success") {
-          console.error("LLM processing failed")
+      if (result.type === "success") {
+        const { instruction, audioBase64, instructionId, timeLeft } =
+          result.data
+
+        console.log(`[${meditationId}] [${timeLeft}]: ${instruction}`)
+
+        // Convert base64 to ArrayBuffer
+        const binaryString = atob(audioBase64)
+        const len = binaryString.length
+        const bytes = new Uint8Array(len)
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
         }
-      } else {
-        // Handle non-OK responses
-        if (response.status === 401) {
-          goto("/login/sign_in")
+        const buffer = bytes.buffer
+
+        // Play the audio
+        await playAudio(buffer, instruction, instructionId)
+
+        // Check if the meditation session should end
+        if (timeLeft <= 0) {
+          console.log(
+            `Ending session as time left (${timeLeft} seconds) is over`,
+          )
+          await stopMeditation() // This will update the database and call endMeditation
+          return
+        }
+      } else if (result.type === "error") {
+        console.error("Instruction generation failed:", result.data.error)
+        if (result.data.redirect) {
+          goto(result.data.redirect)
         } else {
           goto("/account/meditate/oops")
         }
       }
     } catch (error) {
       console.error("Network or parsing error:", error)
+      goto("/account/meditate/oops")
     }
-
-    // Fetch and play instructions
-    const { data, error } = await supabase
-      .from("meditation_instructions")
-      .select("*")
-      .eq("meditation_id", meditationId)
-      .is("play_ts", null)
-      .order("ts", { ascending: true })
-      .limit(1)
-
-    if (error) {
-      console.error("Error fetching instructions:", error)
-    } else if (data && data.length > 0) {
-      const instruction = data[0]
-      if (instruction.instruction.trim().length > 0) {
-        try {
-          const audioUrl = await fetchAudio(instruction.id)
-          currentAudioPromise = playAudio(audioUrl, instruction.id)
-          await currentAudioPromise
-        } catch (error) {
-          console.error("Failed to fetch or play audio:", error)
-        }
-      } else {
-        console.error("Instruction is empty")
-      }
-    }
-
-    const { data: sessionData, error: sessionError } = await supabase
-      .from("meditation_sessions")
-      .select("start_ts, duration")
-      .eq("id", meditationId)
-      .single()
-
-    if (sessionError) {
-      console.error("Error checking session:", sessionError)
-      console.log("Session data:", sessionData)
-    } else if (sessionData) {
-      const startTime = new Date(sessionData.start_ts).getTime()
-      const currentTime = new Date().getTime()
-      const elapsedTimeMinutes = (currentTime - startTime) / (60 * 1000) // Convert to minutes
-
-      if (elapsedTimeMinutes >= sessionData.duration) {
-        console.log(
-          `Ending session as elapsed time (${elapsedTimeMinutes} minutes) has reached or exceeded the duration (${sessionData.duration} minutes)`,
-        )
-        endMeditation()
-        return
-      }
-    }
-  }
-
-  async function fetchAudio(instructionId: string) {
-    const response = await fetch(`/account/meditate/audio?id=${instructionId}`)
-    if (!response.ok) throw new Error("Failed to fetch audio")
-    const blob = await response.blob()
-    return URL.createObjectURL(blob)
   }
 
   async function playAudio(
-    audioUrl: string,
+    audioBuffer: ArrayBuffer,
+    instruction: string,
     instructionId: number,
   ): Promise<void> {
-    if (audio) {
-      audio.src = audioUrl
-      return new Promise((resolve) => {
-        audio.onended = async () => {
-          await updatePlayTimestamp(instructionId)
-          resolve()
-        }
-        audio.play()
+    return new Promise((resolve, reject) => {
+      const blob = new Blob([audioBuffer], { type: "audio/mp3" })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+
+      audio.onended = async () => {
+        URL.revokeObjectURL(url)
+        await updatePlayTimestamp(instructionId)
+        resolve()
+      }
+
+      audio.onerror = (err) => {
+        console.error("Error playing audio:", err)
+        URL.revokeObjectURL(url)
+        reject(err)
+      }
+
+      audio.play().catch((error) => {
+        console.error("Error starting audio playback:", error)
+        URL.revokeObjectURL(url)
+        reject(error)
       })
-    }
-    return Promise.resolve()
+    })
   }
 
   async function updatePlayTimestamp(instructionId: number) {
@@ -149,22 +130,18 @@
 
   async function stopMeditation() {
     try {
-      const response = await fetch("/account/meditate?/stop", {
-        method: "POST",
-        body: new URLSearchParams({
-          meditationId: meditationId.toString(),
-        }),
-      })
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.redirect) {
-          goto(result.redirect)
-        } else {
-          endMeditation()
-        }
-      } else {
-        throw new Error("Failed to stop meditation")
+      const { error } = await supabase
+        .from("meditation_sessions")
+        .update({ end_ts: new Date().toISOString() })
+        .eq("id", meditationId)
+
+      if (error) {
+        console.error("Error updating meditation session:", error)
+        throw error
       }
+
+      console.log(`Successfully stopped meditation ${meditationId}`)
+      endMeditation()
     } catch (err) {
       console.error("Error stopping meditation:", err)
       goto("/account/meditate/oops")
@@ -209,5 +186,3 @@
     </button>
   </div>
 </div>
-
-<audio bind:this={audio}></audio>
