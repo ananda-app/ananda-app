@@ -7,6 +7,29 @@ import { JsonOutputParser } from "@langchain/core/output_parsers";
 import { OPENAI_API_KEY } from '$env/static/private';
 import { textToSpeech } from '$lib/textToSpeech';
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    
+    const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let result = '';
+    let i = 0;
+    while (i < binary.length) {
+        const a = binary.charCodeAt(i++);
+        const b = binary.charCodeAt(i++);
+        const c = binary.charCodeAt(i++);
+        result += base64Chars.charAt(a >> 2) +
+                  base64Chars.charAt(((a & 3) << 4) | (b >> 4)) +
+                  (isNaN(b) ? '=' : base64Chars.charAt(((b & 15) << 2) | (c >> 6))) +
+                  (isNaN(b + c) ? '=' : base64Chars.charAt(c & 63));
+    }
+    return result;
+}
+
 interface MeditationResponse {
   thoughts: {
     stage: string;
@@ -259,7 +282,7 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
             if (!audioBuffer) {
               throw new Error('Text-to-speech returned no audio data');
             }
-            audioBase64 = Buffer.from(audioBuffer).toString('base64');
+            audioBase64 = arrayBufferToBase64(audioBuffer);
         } catch (error) {
             console.error('Text-to-speech error:', error);
             // Note: We're not throwing the error here, so the instruction can still be used without audio
